@@ -14,6 +14,21 @@ const teacherOnly = (req, res, next) => {
   next();
 };
 
+const isDateString = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '');
+
+const getTeacherClass = async (conn, classId, teacherId) => {
+  const [rows] = await conn.query(
+    `SELECT c.id, c.name, c.type, s.day_of_week, s.start_time, s.end_time, s.id as schedule_id,
+            (SELECT COUNT(DISTINCT sc.session_date) FROM session_comments sc WHERE sc.class_id = c.id) as session_count
+     FROM classes c
+     JOIN schedules s ON s.class_id = c.id AND s.teacher_id = ? AND s.is_active = TRUE
+     WHERE c.id = ? AND c.is_active = TRUE
+     LIMIT 1`,
+    [teacherId, classId]
+  );
+  return rows[0];
+};
+
 // ===================== ONLINE STATUS =====================
 
 // Cập nhật trạng thái online (gọi mỗi 30s từ FE)
@@ -51,7 +66,8 @@ router.get('/dashboard', teacherOnly, async (req, res) => {
     // Lớp của giáo viên
     const [myClasses] = await db.query(
       `SELECT c.*, s.day_of_week, s.start_time, s.end_time, s.id as schedule_id,
-              COUNT(st.id) as student_count
+              (SELECT COUNT(DISTINCT sc.session_date) FROM session_comments sc WHERE sc.class_id = c.id) as session_count,
+              COUNT(DISTINCT st.id) as student_count
        FROM classes c
        JOIN schedules s ON s.class_id = c.id AND s.teacher_id = ? AND s.is_active = TRUE
        LEFT JOIN students st ON st.class_id = c.id
@@ -99,6 +115,7 @@ router.get('/classes/vip', teacherOnly, async (req, res) => {
   try {
     const [rows] = await db.query(
       `SELECT c.*, s.day_of_week, s.start_time, s.end_time, s.id as schedule_id,
+              (SELECT COUNT(DISTINCT sc.session_date) FROM session_comments sc WHERE sc.class_id = c.id) as session_count,
               COUNT(DISTINCT st.id) as student_count
        FROM classes c
        JOIN schedules s ON s.class_id = c.id AND s.teacher_id = ? AND s.is_active = TRUE
@@ -119,6 +136,7 @@ router.get('/classes/trial', teacherOnly, async (req, res) => {
   try {
     const [rows] = await db.query(
       `SELECT c.*, s.day_of_week, s.start_time, s.end_time, s.id as schedule_id,
+              (SELECT COUNT(DISTINCT sc.session_date) FROM session_comments sc WHERE sc.class_id = c.id) as session_count,
               COUNT(DISTINCT st.id) as student_count
        FROM classes c
        JOIN schedules s ON s.class_id = c.id AND s.teacher_id = ? AND s.is_active = TRUE
@@ -131,6 +149,123 @@ router.get('/classes/trial', teacherOnly, async (req, res) => {
     res.json({ success: true, classes: rows });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Lỗi server' });
+  }
+});
+
+// Danh sách học viên để giáo viên điểm danh
+router.get('/classes/:id/students', teacherOnly, async (req, res) => {
+  const classId = req.params.id;
+  const sessionDate = req.query.date || new Date().toISOString().slice(0, 10);
+
+  if (!isDateString(sessionDate)) {
+    return res.status(400).json({ success: false, message: 'Ngày điểm danh không hợp lệ' });
+  }
+
+  try {
+    const teacherClass = await getTeacherClass(db, classId, req.user.id);
+    if (!teacherClass) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy lớp học' });
+    }
+
+    const [students] = await db.query(
+      `SELECT u.id, u.username, u.full_name, u.email,
+              COALESCE(sc.attendance, 'present') as attendance,
+              COALESCE(sc.homework_done, TRUE) as homework_done,
+              sc.comment
+       FROM students st
+       JOIN users u ON u.id = st.user_id
+       LEFT JOIN session_comments sc
+         ON sc.student_id = u.id AND sc.class_id = st.class_id AND sc.session_date = ?
+       WHERE st.class_id = ? AND u.is_active = TRUE
+       ORDER BY u.full_name`,
+      [sessionDate, classId]
+    );
+
+    res.json({ success: true, class: teacherClass, students, session_date: sessionDate });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Lỗi server' });
+  }
+});
+
+// Lưu điểm danh từng buổi học
+router.post('/classes/:id/attendance', teacherOnly, async (req, res) => {
+  const classId = req.params.id;
+  const { session_date, records } = req.body;
+  const validAttendance = new Set(['present', 'absent', 'late']);
+
+  if (!isDateString(session_date)) {
+    return res.status(400).json({ success: false, message: 'Ngày điểm danh không hợp lệ' });
+  }
+  if (!Array.isArray(records) || records.length === 0) {
+    return res.status(400).json({ success: false, message: 'Chưa có học viên nào để điểm danh' });
+  }
+
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const teacherClass = await getTeacherClass(conn, classId, req.user.id);
+    if (!teacherClass) {
+      await conn.rollback();
+      return res.status(404).json({ success: false, message: 'Không tìm thấy lớp học' });
+    }
+
+    const [enrolled] = await conn.query(
+      'SELECT user_id FROM students WHERE class_id = ?',
+      [classId]
+    );
+    const enrolledIds = new Set(enrolled.map(row => Number(row.user_id)));
+
+    const normalized = records.map(record => ({
+      student_id: Number(record.student_id),
+      attendance: validAttendance.has(record.attendance) ? record.attendance : 'present',
+      comment: record.comment?.trim() || null,
+      homework_done: record.homework_done === undefined ? true : Boolean(record.homework_done),
+    }));
+
+    const invalid = normalized.find(record => !enrolledIds.has(record.student_id));
+    if (invalid) {
+      await conn.rollback();
+      return res.status(400).json({ success: false, message: 'Danh sách học viên không hợp lệ' });
+    }
+
+    const values = normalized.map(record => [
+      record.student_id,
+      classId,
+      req.user.id,
+      session_date,
+      record.attendance,
+      record.comment,
+      record.homework_done,
+    ]);
+
+    await conn.query(
+      `INSERT INTO session_comments
+        (student_id, class_id, teacher_id, session_date, attendance, comment, homework_done)
+       VALUES ?
+       ON DUPLICATE KEY UPDATE
+        teacher_id = VALUES(teacher_id),
+        attendance = VALUES(attendance),
+        comment = VALUES(comment),
+        homework_done = VALUES(homework_done),
+        updated_at = CURRENT_TIMESTAMP`,
+      [values]
+    );
+
+    const [[{ session_count }]] = await conn.query(
+      'SELECT COUNT(DISTINCT session_date) as session_count FROM session_comments WHERE class_id = ?',
+      [classId]
+    );
+
+    await conn.commit();
+    res.json({ success: true, message: 'Đã lưu điểm danh', session_count });
+  } catch (err) {
+    await conn.rollback();
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Lỗi server' });
+  } finally {
+    conn.release();
   }
 });
 

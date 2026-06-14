@@ -27,7 +27,7 @@
 ================================================ */
 .s-sidebar {
   width: 220px; min-width: 220px;
-  background: linear-gradient(180deg, #1a3a22 0%, #2d5a35 100%);
+  background: #1e9066;
   display: flex; flex-direction: column; color: #fff;
   position: sticky; top: 0; height: 100vh;
   overflow-y: auto; scrollbar-width: none; flex-shrink: 0;
@@ -238,6 +238,32 @@
 .s-cls-card-header { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
 .s-cls-icon { flex-shrink: 0; }
 .s-cls-name { font-size: 16px; font-weight: 800; color: #1a3a22; margin-bottom: 6px; }
+.s-cls-session-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #f8fdf8;
+  border: 1.5px solid #e2f0e4;
+}
+.s-cls-session-summary div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.s-cls-session-summary strong {
+  font-size: 22px;
+  line-height: 1;
+  color: #1a3a22;
+}
+.s-cls-session-summary span {
+  font-size: 11px;
+  font-weight: 700;
+  color: #6a8f70;
+}
 .s-cls-details { display: flex; flex-direction: column; gap: 8px; }
 .s-cls-detail-row { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; color: #5a7a5e; }
 

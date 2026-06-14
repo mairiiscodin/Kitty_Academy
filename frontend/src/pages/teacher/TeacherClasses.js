@@ -1,11 +1,23 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
+import './Teacher.css';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 const DAYS_VI = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
 
 function fmtTime(t) { return t ? t.substring(0, 5) : ''; }
+function todayISO() {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 10);
+}
+
+const ATTENDANCE_OPTIONS = [
+  { value: 'present', label: 'Có mặt' },
+  { value: 'late', label: 'Đi muộn' },
+  { value: 'absent', label: 'Vắng' },
+];
 
 // ---- Modal nhờ GV khác ----
 function SubstituteModal({ cls, onClose, onSuccess }) {
@@ -122,9 +134,173 @@ function SubstituteModal({ cls, onClose, onSuccess }) {
   );
 }
 
+// ---- Modal điểm danh ----
+function AttendanceModal({ cls, onClose, onSaved }) {
+  const [sessionDate, setSessionDate] = useState(todayISO());
+  const [students, setStudents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const fetchStudents = useCallback(() => {
+    setLoading(true);
+    setMsg(null);
+    axios.get(`${API}/teacher/classes/${cls.id}/students`, { params: { date: sessionDate } })
+      .then(r => {
+        const rows = (r.data.students || []).map(s => ({
+          ...s,
+          attendance: s.attendance || 'present',
+          homework_done: s.homework_done === 0 ? false : s.homework_done !== false,
+          comment: s.comment || '',
+        }));
+        setStudents(rows);
+      })
+      .catch(err => {
+        setStudents([]);
+        setMsg({ type: 'error', text: err.response?.data?.message || 'Lỗi tải danh sách học viên' });
+      })
+      .finally(() => setLoading(false));
+  }, [cls.id, sessionDate]);
+
+  useEffect(() => { fetchStudents(); }, [fetchStudents]);
+
+  const updateStudent = (studentId, patch) => {
+    setStudents(prev => prev.map(s => s.id === studentId ? { ...s, ...patch } : s));
+  };
+
+  const markAll = attendance => {
+    setStudents(prev => prev.map(s => ({ ...s, attendance })));
+  };
+
+  const handleSave = async () => {
+    if (students.length === 0) return setMsg({ type: 'error', text: 'Lớp chưa có học viên để điểm danh' });
+    setSaving(true);
+    setMsg(null);
+    try {
+      const records = students.map(s => ({
+        student_id: s.id,
+        attendance: s.attendance,
+        homework_done: Boolean(s.homework_done),
+        comment: s.comment,
+      }));
+      const r = await axios.post(`${API}/teacher/classes/${cls.id}/attendance`, {
+        session_date: sessionDate,
+        records,
+      });
+      setMsg({ type: 'success', text: `Đã lưu điểm danh. Lớp đã dạy ${r.data.session_count ?? 0} buổi.` });
+      onSaved?.();
+    } catch (err) {
+      setMsg({ type: 'error', text: err.response?.data?.message || 'Lỗi lưu điểm danh' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="t-modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="t-modal t-attendance-modal">
+        <div className="t-modal-header">
+          <div className="t-modal-title">
+            <span className="t-modal-icon">✓</span>
+            Điểm danh lớp
+          </div>
+          <button className="t-modal-close" onClick={onClose}>×</button>
+        </div>
+
+        <div className="t-modal-class-info">
+          <div className="t-modal-class-name">{cls.name}</div>
+          <div className="t-modal-class-meta">
+            <span>{DAYS_VI[cls.day_of_week]}</span>
+            <span>{fmtTime(cls.start_time)} - {fmtTime(cls.end_time)}</span>
+            <span>{cls.student_count ?? 0} học viên</span>
+            <span>{cls.session_count ?? 0} buổi đã dạy</span>
+          </div>
+        </div>
+
+        <div className="t-modal-body">
+          <div className="t-att-toolbar">
+            <div className="t-att-date">
+              <label>Ngày học</label>
+              <input
+                type="date"
+                value={sessionDate}
+                onChange={e => setSessionDate(e.target.value || todayISO())}
+              />
+            </div>
+            <div className="t-att-actions">
+              <button type="button" onClick={() => markAll('present')}>Tất cả có mặt</button>
+              <button type="button" onClick={() => markAll('late')}>Tất cả đi muộn</button>
+              <button type="button" onClick={() => markAll('absent')}>Tất cả vắng</button>
+            </div>
+          </div>
+
+          {msg && <div className={`t-modal-msg ${msg.type}`}>{msg.text}</div>}
+
+          {loading ? (
+            <div className="t-modal-loading">Đang tải danh sách học viên...</div>
+          ) : students.length === 0 ? (
+            <div className="t-modal-empty">
+              <span>📚</span>
+              <span>Lớp chưa có học viên</span>
+            </div>
+          ) : (
+            <div className="t-att-list">
+              {students.map(student => (
+                <div key={student.id} className="t-att-row">
+                  <div className="t-att-student">
+                    <div className="t-att-avatar">{student.full_name?.charAt(0) || '?'}</div>
+                    <div className="t-att-info">
+                      <div className="t-att-name">{student.full_name}</div>
+                      <div className="t-att-username">@{student.username}</div>
+                    </div>
+                  </div>
+
+                  <select
+                    className={`t-att-select ${student.attendance}`}
+                    value={student.attendance}
+                    onChange={e => updateStudent(student.id, { attendance: e.target.value })}
+                  >
+                    {ATTENDANCE_OPTIONS.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+
+                  <label className="t-att-homework">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(student.homework_done)}
+                      onChange={e => updateStudent(student.id, { homework_done: e.target.checked })}
+                    />
+                    Bài tập
+                  </label>
+
+                  <input
+                    className="t-att-comment"
+                    value={student.comment}
+                    placeholder="Nhận xét"
+                    onChange={e => updateStudent(student.id, { comment: e.target.value })}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="t-modal-footer">
+          <button className="t-btn-cancel" onClick={onClose}>Đóng</button>
+          <button className="t-btn-send" onClick={handleSave} disabled={saving || loading || students.length === 0}>
+            {saving ? 'Đang lưu...' : 'Lưu điểm danh'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---- Class Card ----
 function ClassCard({ cls, onCancelRequest }) {
   const [showModal, setShowModal] = useState(false);
+  const [showAttendance, setShowAttendance] = useState(false);
 
   return (
     <>
@@ -150,6 +326,10 @@ function ClassCard({ cls, onCancelRequest }) {
             <span>{cls.student_count ?? 0} học viên</span>
           </div>
           <div className="t-cls-meta-row">
+            <span className="t-meta-icon">✓</span>
+            <span>{cls.session_count ?? 0} buổi đã dạy</span>
+          </div>
+          <div className="t-cls-meta-row">
             <span className="t-meta-icon">📅</span>
             <span>{DAYS_VI[cls.day_of_week]}</span>
           </div>
@@ -165,10 +345,23 @@ function ClassCard({ cls, onCancelRequest }) {
           )}
         </div>
 
-        <button className="t-btn-cancel-class" onClick={() => setShowModal(true)}>
-          🔄 Nhờ GV khác dạy thay
-        </button>
+        <div className="t-cls-actions">
+          <button className="t-btn-attendance" onClick={() => setShowAttendance(true)}>
+            Điểm danh
+          </button>
+          <button className="t-btn-cancel-class" onClick={() => setShowModal(true)}>
+            🔄 Nhờ GV khác dạy thay
+          </button>
+        </div>
       </div>
+
+      {showAttendance && (
+        <AttendanceModal
+          cls={cls}
+          onClose={() => setShowAttendance(false)}
+          onSaved={onCancelRequest}
+        />
+      )}
 
       {showModal && (
         <SubstituteModal

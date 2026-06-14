@@ -9,6 +9,7 @@ import StudentGrades from './StudentGrades';
 import StudentComments from './StudentComments';
 import StudentNotifications from './StudentNotifications';
 import './Student.css';
+import DBLogo from '../../assets/dashboard-logo.png';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
@@ -35,10 +36,7 @@ const Sidebar = ({ user, unread, onLogout }) => {
   return (
     <div className="s-sidebar">
       <div className="s-sidebar-logo">
-        <svg width="34" height="34" viewBox="0 0 48 48" fill="none">
-          <polygon points="24,4 44,14 44,34 24,44 4,34 4,14" fill="#fff" opacity="0.2" />
-          <text x="24" y="30" textAnchor="middle" fontSize="18" fontWeight="bold" fill="#fff" fontFamily="serif">K</text>
-        </svg>
+        <img className="dashboard-logo-img" src={DBLogo} alt="Kitty Academy" />
         <div>
           <div className="s-brand">Kitty Academy</div>
           <div className="s-brand-sub">—Global Learning Community</div>

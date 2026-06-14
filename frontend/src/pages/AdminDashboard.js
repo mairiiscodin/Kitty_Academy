@@ -3,6 +3,7 @@ import { useNavigate, Routes, Route, NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import './AdminDashboard.css';
+import DBLogo from '../assets/dashboard-logo.png';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
@@ -50,10 +51,7 @@ const Sidebar = ({ user, onLogout }) => {
   return (
     <div className="sidebar">
       <div className="sidebar-logo">
-        <svg width="32" height="32" viewBox="0 0 48 48" fill="none">
-          <polygon points="24,4 44,14 44,34 24,44 4,34 4,14" fill="#fff" opacity="0.2"/>
-          <text x="24" y="30" textAnchor="middle" fontSize="18" fontWeight="bold" fill="#fff" fontFamily="serif">K</text>
-        </svg>
+        <img className="dashboard-logo-img" src={DBLogo} alt="Kitty Academy" />
         <div>
           <div className="sidebar-brand">Kitty Academy</div>
           <div className="sidebar-brand-sub">—Global Learning Community</div>
@@ -155,6 +153,12 @@ const StatusBadge = ({ val }) => (
   <Badge color={val ? '#2d7a3a' : '#999'}>{val ? 'Hoạt động' : 'Đã khóa'}</Badge>
 );
 
+const getClassLinkHref = (link) => {
+  const trimmed = link?.trim();
+  if (!trimmed) return '';
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+};
+
 // ---- Confirm Delete Modal ----
 const ConfirmModal = ({ item, onConfirm, onCancel, loading }) => (
   <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onCancel()}>
@@ -178,38 +182,98 @@ const ConfirmModal = ({ item, onConfirm, onCancel, loading }) => (
 // ---- Class Form Modal (Thêm / Sửa) ----
 const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
   const DAYS = ['Chủ nhật','Thứ 2','Thứ 3','Thứ 4','Thứ 5','Thứ 6','Thứ 7'];
-  const empty = { name:'', type:'vip', description:'', max_students:30, teacher_id:'', day_of_week:'1', start_time:'18:00', end_time:'18:45' };
+  const emptyForm = { name:'', type:'vip', description:'', class_link:'', max_students:30, teacher_id:'', day_of_week:'1', start_time:'18:00', end_time:'18:45' };
+
   const [form, setForm] = useState(initial ? {
-    name: initial.name || '',
-    type: initial.type || 'vip',
-    description: initial.description || '',
+    name:         initial.name || '',
+    type:         initial.type || 'vip',
+    description:  initial.description || '',
+    class_link:   initial.class_link || '',
     max_students: initial.max_students || 30,
-    teacher_id: initial.teacher_id || '',
-    day_of_week: String(initial.day_of_week ?? '1'),
-    start_time: initial.start_time?.substring(0,5) || '18:00',
-    end_time: initial.end_time?.substring(0,5) || '18:45',
-  } : empty);
+    teacher_id:   initial.teacher_id || '',
+    day_of_week:  String(initial.day_of_week ?? '1'),
+    start_time:   initial.start_time?.substring(0,5) || '18:00',
+    end_time:     initial.end_time?.substring(0,5) || '18:45',
+  } : emptyForm);
+
+  // Student picker state
+  const [allStudents, setAllStudents]     = useState([]);
+  const [selectedIds, setSelectedIds]     = useState([]);
+  const [studentSearch, setStudentSearch] = useState('');
+  const [loadingStudents, setLoadingStudents] = useState(false);
+  // Existing students (edit mode)
+  const [existingStudents, setExistingStudents] = useState([]);
+  const [removingId, setRemovingId] = useState(null);
+
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState('');
+  const [err, setErr]         = useState('');
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  const maxSt = Number(form.max_students) || 30;
+
+  // Load students
+  useEffect(() => {
+    setLoadingStudents(true);
+    if (mode === 'add') {
+      axios.get(`${API}/admin/students/all`)
+        .then(r => setAllStudents(r.data.students || []))
+        .catch(() => setAllStudents([]))
+        .finally(() => setLoadingStudents(false));
+    } else {
+      // Edit: load existing + available
+      Promise.all([
+        axios.get(`${API}/admin/classes/${initial.id}/students`),
+        axios.get(`${API}/admin/classes/${initial.id}/available-students`),
+      ]).then(([ex, av]) => {
+        setExistingStudents(ex.data.students || []);
+        setAllStudents(av.data.students || []);
+      }).catch(() => {}).finally(() => setLoadingStudents(false));
+    }
+  }, [mode, initial]);
+
+  const toggleStudent = (id) => {
+    setSelectedIds(prev => {
+      if (prev.includes(id)) return prev.filter(x => x !== id);
+      const currentTotal = mode === 'edit' ? existingStudents.length + prev.length : prev.length;
+      if (currentTotal >= maxSt) { setErr(`Đã đạt sĩ số tối đa (${maxSt})`); return prev; }
+      setErr('');
+      return [...prev, id];
+    });
+  };
+
+  const handleRemoveExisting = async (studentId) => {
+    setRemovingId(studentId);
+    try {
+      await axios.delete(`${API}/admin/classes/${initial.id}/students/${studentId}`);
+      setExistingStudents(prev => prev.filter(s => s.id !== studentId));
+      // Add back to available list
+      const removed = existingStudents.find(s => s.id === studentId);
+      if (removed) setAllStudents(prev => [...prev, removed].sort((a,b) => a.full_name.localeCompare(b.full_name)));
+    } catch { setErr('Lỗi xóa học sinh'); }
+    finally { setRemovingId(null); }
+  };
+
+  const filteredStudents = allStudents.filter(s =>
+    s.full_name.toLowerCase().includes(studentSearch.toLowerCase()) ||
+    s.username.toLowerCase().includes(studentSearch.toLowerCase())
+  );
 
   const handleSave = async () => {
     if (!form.name.trim()) return setErr('Vui lòng nhập tên lớp');
     setLoading(true); setErr('');
     try {
       if (mode === 'add') {
-        await axios.post(`${API}/admin/classes`, form);
+        await axios.post(`${API}/admin/classes`, { ...form, student_ids: selectedIds });
       } else {
         await axios.put(`${API}/admin/classes/${initial.id}`, form);
-        // Cập nhật lịch nếu có schedule_id
         if (initial.schedule_id) {
           await axios.put(`${API}/admin/schedules/${initial.schedule_id}`, {
-            day_of_week: form.day_of_week,
-            start_time: form.start_time,
-            end_time: form.end_time,
-            teacher_id: form.teacher_id || initial.teacher_id,
+            day_of_week: form.day_of_week, start_time: form.start_time,
+            end_time: form.end_time, teacher_id: form.teacher_id || initial.teacher_id,
           });
+        }
+        if (selectedIds.length > 0) {
+          await axios.post(`${API}/admin/classes/${initial.id}/enroll`, { student_ids: selectedIds });
         }
       }
       onSave();
@@ -217,6 +281,10 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
       setErr(e.response?.data?.message || 'Lỗi lưu dữ liệu');
     } finally { setLoading(false); }
   };
+
+  const currentTotal = mode === 'edit'
+    ? existingStudents.length + selectedIds.length
+    : selectedIds.length;
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
@@ -229,11 +297,12 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
         <div className="modal-body">
           {err && <div className="form-msg error">{err}</div>}
 
+          {/* ---- Thông tin lớp ---- */}
+          <div className="modal-section-title">📋 Thông tin lớp</div>
           <div className="form-grid-2">
             <div className="form-group full-col">
               <label>Tên lớp *</label>
-              <input value={form.name} onChange={e => set('name', e.target.value)}
-                placeholder="VD: GD_ENG_001" />
+              <input value={form.name} onChange={e => set('name', e.target.value)} placeholder="VD: GD_ENG_001" />
             </div>
 
             <div className="form-group">
@@ -246,17 +315,22 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
 
             <div className="form-group">
               <label>Sĩ số tối đa</label>
-              <input type="number" min="1" max="100"
-                value={form.max_students} onChange={e => set('max_students', e.target.value)} />
+              <input type="number" min="1" max="100" value={form.max_students}
+                onChange={e => set('max_students', e.target.value)} />
+            </div>
+
+            <div className="form-group full-col">
+              <label>🔗 Link lớp học (Meet / Zoom / Teams...)</label>
+              <input value={form.class_link}
+                onChange={e => set('class_link', e.target.value)}
+                placeholder="https://meet.google.com/xxx-xxxx-xxx" />
             </div>
 
             <div className="form-group full-col">
               <label>Giáo viên phụ trách</label>
               <select value={form.teacher_id} onChange={e => set('teacher_id', e.target.value)}>
                 <option value="">— Chưa chọn —</option>
-                {teachers.map(t => (
-                  <option key={t.id} value={t.id}>{t.full_name}</option>
-                ))}
+                {teachers.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
               </select>
             </div>
 
@@ -280,8 +354,89 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
             <div className="form-group full-col">
               <label>Mô tả</label>
               <textarea value={form.description} onChange={e => set('description', e.target.value)}
-                placeholder="Mô tả lớp học..." rows={3} />
+                placeholder="Mô tả lớp học..." rows={2} />
             </div>
+          </div>
+
+          {/* ---- Học sinh ---- */}
+          <div className="modal-section-title" style={{marginTop:20}}>
+            👥 Học sinh
+            <span className="student-count-chip">
+              {currentTotal} / {maxSt}
+            </span>
+          </div>
+
+          {/* Existing students (edit mode) */}
+          {mode === 'edit' && existingStudents.length > 0 && (
+            <div className="existing-students">
+              <div className="existing-label">Đang trong lớp</div>
+              <div className="existing-list">
+                {existingStudents.map(s => (
+                  <div key={s.id} className="existing-chip">
+                    <span className="existing-chip-name">{s.full_name}</span>
+                    <button
+                      className="existing-chip-remove"
+                      onClick={() => handleRemoveExisting(s.id)}
+                      disabled={removingId === s.id}
+                      title="Xóa khỏi lớp"
+                    >
+                      {removingId === s.id ? '...' : '×'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Search + pick students */}
+          <div className="student-picker">
+            <div className="student-picker-search">
+              <span className="search-icon"><SearchIcon /></span>
+              <input
+                className="search-input"
+                placeholder="Tìm học sinh theo tên, username..."
+                value={studentSearch}
+                onChange={e => setStudentSearch(e.target.value)}
+              />
+            </div>
+
+            {loadingStudents ? (
+              <div className="picker-loading">Đang tải danh sách học sinh...</div>
+            ) : filteredStudents.length === 0 ? (
+              <div className="picker-empty">
+                {studentSearch ? 'Không tìm thấy học sinh' : (mode === 'edit' ? 'Tất cả học sinh đã trong lớp' : 'Chưa có học sinh nào trong hệ thống')}
+              </div>
+            ) : (
+              <div className="picker-list">
+                {filteredStudents.map(s => {
+                  const checked = selectedIds.includes(s.id);
+                  const disabled = !checked && currentTotal >= maxSt;
+                  return (
+                    <div
+                      key={s.id}
+                      className={`picker-item ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}`}
+                      onClick={() => !disabled && toggleStudent(s.id)}
+                    >
+                      <div className={`picker-checkbox ${checked ? 'checked' : ''}`}>
+                        {checked && '✓'}
+                      </div>
+                      <div className="picker-avatar">{s.full_name.charAt(0)}</div>
+                      <div className="picker-info">
+                        <div className="picker-name">{s.full_name}</div>
+                        <div className="picker-username">@{s.username}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {selectedIds.length > 0 && (
+              <div className="picker-selected-summary">
+                ✓ Đã chọn thêm {selectedIds.length} học sinh
+                <button className="picker-clear" onClick={() => setSelectedIds([])}>Bỏ chọn tất cả</button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -400,6 +555,7 @@ const ClassesPage = ({ type }) => {
               <tr>
                 <th>#</th>
                 <th>Tên lớp</th>
+                <th>Link lớp học</th>
                 <th>Loại</th>
                 <th>Giáo viên</th>
                 <th>Ngày học</th>
@@ -411,13 +567,22 @@ const ClassesPage = ({ type }) => {
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={9} className="empty-row">
+                <tr><td colSpan={10} className="empty-row">
                   {search ? 'Không tìm thấy lớp nào' : 'Chưa có lớp học nào'}
                 </td></tr>
               ) : filtered.map((cls, i) => (
                 <tr key={cls.id}>
                   <td className="td-num">{i + 1}</td>
                   <td><strong>{cls.name}</strong></td>
+                  <td className="td-link">
+                    {cls.class_link ? (
+                      <a href={getClassLinkHref(cls.class_link)} target="_blank" rel="noreferrer" title={cls.class_link}>
+                        {cls.class_link}
+                      </a>
+                    ) : (
+                      <span className="td-empty">Chưa có</span>
+                    )}
+                  </td>
                   <td><TypeBadge type={cls.type}/></td>
                   <td>{cls.teacher_name || <span className="td-empty">Chưa có</span>}</td>
                   <td>{cls.day_of_week != null ? DAYS_SHORT[cls.day_of_week] : '—'}</td>

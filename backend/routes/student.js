@@ -38,7 +38,11 @@ router.get('/dashboard', studentOnly, async (req, res) => {
     // Lớp hiện tại của học sinh (qua bảng students)
     const [myClasses] = await db.query(
       `SELECT c.*, s.day_of_week, s.start_time, s.end_time, s.id as schedule_id,
-              u.full_name as teacher_name
+              u.full_name as teacher_name,
+              (SELECT COUNT(DISTINCT sc.session_date) FROM session_comments sc WHERE sc.class_id = c.id) as class_session_count,
+              (SELECT COUNT(*) FROM session_comments sc WHERE sc.class_id = c.id AND sc.student_id = st.user_id) as recorded_sessions,
+              (SELECT COUNT(*) FROM session_comments sc WHERE sc.class_id = c.id AND sc.student_id = st.user_id AND sc.attendance IN ('present','late')) as learned_sessions,
+              (SELECT COUNT(*) FROM session_comments sc WHERE sc.class_id = c.id AND sc.student_id = st.user_id AND sc.attendance = 'absent') as absent_sessions
        FROM students st
        JOIN classes c ON c.id = st.class_id
        JOIN schedules s ON s.class_id = c.id AND s.is_active = TRUE
@@ -104,7 +108,11 @@ router.get('/my-classes', studentOnly, async (req, res) => {
   try {
     const [rows] = await db.query(
       `SELECT c.*, s.day_of_week, s.start_time, s.end_time, s.id as schedule_id,
-              u.full_name as teacher_name, st.enrollment_date
+              u.full_name as teacher_name, st.enrollment_date,
+              (SELECT COUNT(DISTINCT sc.session_date) FROM session_comments sc WHERE sc.class_id = c.id) as class_session_count,
+              (SELECT COUNT(*) FROM session_comments sc WHERE sc.class_id = c.id AND sc.student_id = st.user_id) as recorded_sessions,
+              (SELECT COUNT(*) FROM session_comments sc WHERE sc.class_id = c.id AND sc.student_id = st.user_id AND sc.attendance IN ('present','late')) as learned_sessions,
+              (SELECT COUNT(*) FROM session_comments sc WHERE sc.class_id = c.id AND sc.student_id = st.user_id AND sc.attendance = 'absent') as absent_sessions
        FROM students st
        JOIN classes c ON c.id = st.class_id
        JOIN schedules s ON s.class_id = c.id AND s.is_active = TRUE

@@ -41,6 +41,22 @@ export function StudentMyClasses() {
                     <span className={`s-type-badge ${cls.type}`}>{cls.type === 'vip' ? 'VIP' : 'Trải nghiệm'}</span>
                   </div>
                 </div>
+                <div className="s-cls-session-summary">
+                  <div>
+                    <strong>{cls.learned_sessions ?? 0}</strong>
+                    <span>buổi đã học</span>
+                  </div>
+                  <div>
+                    <strong>{cls.class_session_count ?? 0}</strong>
+                    <span>buổi của lớp</span>
+                  </div>
+                  {(cls.absent_sessions ?? 0) > 0 && (
+                    <div>
+                      <strong>{cls.absent_sessions}</strong>
+                      <span>buổi vắng</span>
+                    </div>
+                  )}
+                </div>
                 <div className="s-cls-details">
                   <div className="s-cls-detail-row"><span>👨‍🏫</span><span>{cls.teacher_name}</span></div>
                   <div className="s-cls-detail-row"><span>📅</span><span>{DAYS_VI[cls.day_of_week]}</span></div>

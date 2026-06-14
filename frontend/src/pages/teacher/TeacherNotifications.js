@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
+import './Teacher.css';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 

@@ -13,7 +13,7 @@
 .sidebar {
   width: 220px;
   min-width: 220px;
-  background: linear-gradient(180deg, #1a3a22 0%, #2d5a35 100%);
+  background: #1e9066;
   display: flex;
   flex-direction: column;
   color: #fff;
@@ -24,6 +24,12 @@
   scrollbar-width: none;
 }
 .sidebar::-webkit-scrollbar { display: none; }
+
+.dashboard-logo-img {
+  width: 58px;
+  height: 44px;
+  object-fit: contain;
+}
 
 .sidebar-logo {
   display: flex;
@@ -326,6 +332,19 @@
 .td-center{ text-align: center; }
 .td-time  { font-size: 12px; color: #5a7a5e; white-space: nowrap; }
 .td-empty { color: #ccc; font-style: italic; font-size: 12px; }
+.td-link { max-width: 220px; }
+.td-link a {
+  display: inline-block;
+  max-width: 220px;
+  color: #1565C0;
+  font-size: 12.5px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.td-link a:hover { color: #0d47a1; text-decoration: underline; }
 
 /* Action buttons */
 .action-btns { display: flex; gap: 6px; }
@@ -431,3 +450,133 @@
 .toast-err { background: #c62828; color: #fff; }
 @keyframes toastIn  { from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:none; } }
 @keyframes toastOut { to   { opacity:0; transform:translateY(-10px); } }
+
+/* ================================================================
+   MODAL SECTIONS
+================================================================ */
+.modal-section-title {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px; font-weight: 800; color: #1a3a22;
+  text-transform: uppercase; letter-spacing: 0.5px;
+  margin-bottom: 14px; padding-bottom: 8px;
+  border-bottom: 2px solid #f0f7f1;
+}
+
+/* ================================================================
+   STUDENT PICKER
+================================================================ */
+.student-count-chip {
+  margin-left: auto;
+  background: #e8f5e9; color: #2d7a3a;
+  font-size: 11px; font-weight: 700;
+  padding: 2px 10px; border-radius: 20px;
+  text-transform: none; letter-spacing: 0;
+}
+
+.existing-students { margin-bottom: 14px; }
+.existing-label {
+  font-size: 11px; font-weight: 700; color: #888;
+  text-transform: uppercase; letter-spacing: 0.4px;
+  margin-bottom: 8px;
+}
+.existing-list {
+  display: flex; flex-wrap: wrap; gap: 7px;
+}
+.existing-chip {
+  display: flex; align-items: center; gap: 6px;
+  background: #e8f5e9; border: 1.5px solid #a5d6a7;
+  border-radius: 20px; padding: 4px 6px 4px 12px;
+}
+.existing-chip-name { font-size: 12px; font-weight: 700; color: #1a3a22; }
+.existing-chip-remove {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: #ffebee; border: none; cursor: pointer;
+  color: #c62828; font-size: 14px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  line-height: 1; transition: background 0.15s;
+}
+.existing-chip-remove:hover { background: #ffcdd2; }
+.existing-chip-remove:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.student-picker {
+  background: #fafafa;
+  border: 1.5px solid #e8f0e9;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.student-picker .search-bar {
+  margin: 0;
+  border: none;
+  border-bottom: 1.5px solid #e8f0e9;
+  border-radius: 0;
+  background: #fff;
+}
+.student-picker .search-bar:focus-within {
+  box-shadow: none;
+  border-color: #2d7a3a;
+}
+
+.picker-loading,
+.picker-empty {
+  padding: 24px; text-align: center;
+  color: #aaa; font-size: 13px;
+}
+
+.picker-list {
+  max-height: 220px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #d0e8d5 transparent;
+}
+
+.picker-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background 0.12s;
+  border-bottom: 1px solid #f0f0f0;
+}
+.picker-item:last-child { border-bottom: none; }
+.picker-item:hover:not(.disabled) { background: #f0f7f1; }
+.picker-item.checked { background: #e8f5e9; }
+.picker-item.disabled { opacity: 0.45; cursor: not-allowed; }
+
+.picker-checkbox {
+  width: 20px; height: 20px; border-radius: 6px;
+  border: 2px solid #c8d8ca; background: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 800; color: #fff;
+  flex-shrink: 0; transition: all 0.15s;
+}
+.picker-checkbox.checked {
+  background: #2d7a3a; border-color: #2d7a3a;
+}
+
+.picker-avatar {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: linear-gradient(135deg, #2d7a3a, #4aaa5a);
+  color: #fff; font-size: 14px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+
+.picker-info { flex: 1; min-width: 0; }
+.picker-name { font-size: 13px; font-weight: 700; color: #1a3a22; }
+.picker-username { font-size: 11px; color: #aaa; }
+
+.picker-selected-summary {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px;
+  background: #e8f5e9;
+  font-size: 12px; font-weight: 700; color: #2d7a3a;
+  border-top: 1px solid #c8e6c9;
+}
+.picker-clear {
+  background: none; border: none; cursor: pointer;
+  font-size: 11px; color: #888; font-family: 'Nunito', sans-serif;
+  text-decoration: underline;
+}
+.picker-clear:hover { color: #c62828; }
+
+/* Wider modal for student picker */
+.class-modal { max-width: 640px; }
