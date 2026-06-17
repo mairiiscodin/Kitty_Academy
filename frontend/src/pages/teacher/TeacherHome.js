@@ -15,6 +15,12 @@ function fmtTime(t) {
   return t.substring(0, 5);
 }
 
+function getClassLinkHref(link) {
+  const trimmed = link?.trim();
+  if (!trimmed) return '';
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
 function getSlotIndex(start) {
   const h = fmtTime(start);
   const map = { '18:00': 0, '18:45': 1, '19:30': 2, '20:15': 3 };
@@ -121,6 +127,17 @@ export default function TeacherHome() {
                     </span>
                   </div>
                   <div className="t-class-day">{DAYS_VI[cls.day_of_week]}</div>
+                  {cls.class_link && (
+                    <a
+                      className="t-class-link compact"
+                      href={getClassLinkHref(cls.class_link)}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={cls.class_link}
+                    >
+                      Vào lớp học
+                    </a>
+                  )}
                 </div>
                 <span className={`t-type-badge ${cls.type}`}>
                   {cls.type === 'vip' ? 'VIP' : 'Thử'}

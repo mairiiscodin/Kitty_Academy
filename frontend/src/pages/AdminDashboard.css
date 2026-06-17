@@ -580,3 +580,80 @@
 
 /* Wider modal for student picker */
 .class-modal { max-width: 640px; }
+
+.bell-wrap {
+  position: relative;
+}
+
+.admin-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #c62828;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 17px;
+  text-align: center;
+}
+
+.admin-noti-list {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-noti-card {
+  width: 100%;
+  text-align: left;
+  background: #fff;
+  border: 1px solid #e4ece5;
+  border-radius: 10px;
+  padding: 14px 16px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.admin-noti-card:hover {
+  border-color: #9fcaab;
+  box-shadow: 0 6px 18px rgba(45, 122, 58, 0.08);
+}
+
+.admin-noti-card.unread {
+  border-left: 4px solid #2d7a3a;
+  background: #f8fdf8;
+}
+
+.admin-noti-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  color: #1a3a22;
+  font-size: 14px;
+}
+
+.admin-noti-head span {
+  flex-shrink: 0;
+  color: #888;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.admin-noti-message {
+  margin-top: 8px;
+  color: #405047;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.admin-noti-sender {
+  margin-top: 8px;
+  color: #777;
+  font-size: 12px;
+  font-weight: 700;
+}

@@ -7,6 +7,11 @@ const API = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 const DAYS_VI = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
 
 function fmtTime(t) { return t ? t.substring(0, 5) : ''; }
+function getClassLinkHref(link) {
+  const trimmed = link?.trim();
+  if (!trimmed) return '';
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
 function todayISO() {
   const d = new Date();
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
@@ -341,6 +346,20 @@ function ClassCard({ cls, onCancelRequest }) {
             <div className="t-cls-meta-row">
               <span className="t-meta-icon">📝</span>
               <span className="t-cls-desc">{cls.description}</span>
+            </div>
+          )}
+          {cls.class_link && (
+            <div className="t-cls-meta-row">
+              <span className="t-meta-icon">🔗</span>
+              <a
+                className="t-class-link"
+                href={getClassLinkHref(cls.class_link)}
+                target="_blank"
+                rel="noreferrer"
+                title={cls.class_link}
+              >
+                Vào lớp học
+              </a>
             </div>
           )}
         </div>

@@ -119,10 +119,12 @@ const TrialClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
                 {DAYS.map((day, index) => <option key={index} value={index}>{day}</option>)}
               </select>
             </div>
+            <br></br>
             <div className="form-group">
               <label>Giờ bắt đầu</label>
               <input type="time" value={form.start_time} onChange={e => set('start_time', e.target.value)} />
             </div>
+            
             <div className="form-group">
               <label>Giờ kết thúc</label>
               <input type="time" value={form.end_time} onChange={e => set('end_time', e.target.value)} />

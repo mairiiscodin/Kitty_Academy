@@ -78,6 +78,51 @@ router.get('/dashboard', async (req, res) => {
   }
 });
 
+// ===================== NOTIFICATIONS =====================
+router.get('/notifications', async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      `SELECT n.*, u.full_name as sender_name,
+              cr.status as request_status, cr.schedule_id
+       FROM notifications n
+       LEFT JOIN users u ON u.id = n.sender_id
+       LEFT JOIN cancel_requests cr ON cr.id = n.cancel_request_id
+       WHERE n.user_id = ?
+       ORDER BY n.created_at DESC
+       LIMIT 50`,
+      [req.user.id]
+    );
+    const [[{ unread }]] = await db.query(
+      'SELECT COUNT(*) as unread FROM notifications WHERE user_id = ? AND is_read = FALSE',
+      [req.user.id]
+    );
+    res.json({ success: true, notifications: rows, unread });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Loi server' });
+  }
+});
+
+router.put('/notifications/read-all', async (req, res) => {
+  try {
+    await db.query('UPDATE notifications SET is_read = TRUE WHERE user_id = ?', [req.user.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false });
+  }
+});
+
+router.put('/notifications/:id/read', async (req, res) => {
+  try {
+    await db.query(
+      'UPDATE notifications SET is_read = TRUE WHERE id = ? AND user_id = ?',
+      [req.params.id, req.user.id]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false });
+  }
+});
+
 // ===================== USERS =====================
 router.get('/users', async (req, res) => {
   try {

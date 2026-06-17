@@ -264,6 +264,26 @@
   font-size: 12px; color: #6a8f70;
 }
 .t-class-day { font-size: 11px; color: #a0b8a4; margin-top: 3px; }
+
+.t-class-link {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  color: #1565c0;
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+  line-height: 1.3;
+}
+
+.t-class-link:hover {
+  text-decoration: underline;
+}
+
+.t-class-link.compact {
+  margin-top: 6px;
+}
 .t-empty { text-align: center; color: #aaa; padding: 32px; font-size: 14px; }
 
 /* Timetable */

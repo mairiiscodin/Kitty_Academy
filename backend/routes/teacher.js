@@ -352,6 +352,31 @@ router.post('/cancel-request', teacherOnly, async (req, res) => {
       ]
     );
 
+    // Gửi thông báo cho admin biết GV A đã nhờ GV B dạy thay
+    const [subTeacherRows] = await db.query(
+      'SELECT full_name FROM users WHERE id = ?',
+      [substitute_teacher_id]
+    );
+    const substituteTeacherName = subTeacherRows[0]?.full_name || 'Không xác định';
+
+    const [admins] = await db.query(
+      'SELECT id FROM users WHERE role = ? AND is_active = TRUE',
+      ['admin']
+    );
+    for (const admin of admins) {
+      await db.query(
+        `INSERT INTO notifications (user_id, sender_id, type, title, message, cancel_request_id)
+         VALUES (?, ?, 'cancel_request', ?, ?, ?)`,
+        [
+          admin.id,
+          req.user.id,
+          `📋 Yêu cầu dạy thay mới`,
+          `${req.user.full_name} đã nhờ ${substituteTeacherName} dạy thay lớp "${sched.class_name}" (${dayStr} ${timeStr}). Lý do: ${reason || 'Không có lý do'}`,
+          result.insertId
+        ]
+      );
+    }
+
     res.json({ success: true, message: 'Đã gửi yêu cầu thành công', request_id: result.insertId });
   } catch (err) {
     console.error(err);

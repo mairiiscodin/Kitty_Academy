@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Routes, Route, NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
@@ -44,7 +44,7 @@ const SearchIcon   = () => <Icon d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0
 // ================================================================
 // SIDEBAR
 // ================================================================
-const Sidebar = ({ user, onLogout }) => {
+const Sidebar = ({ user, unread, onLogout }) => {
   const [expanded, setExpanded] = useState({ home: true, classes: true, teachers: true, students: true });
   const toggle = k => setExpanded(p => ({ ...p, [k]: !p[k] }));
 
@@ -129,7 +129,10 @@ const Sidebar = ({ user, onLogout }) => {
 
       <div className="sidebar-footer">
         <button className="footer-btn"><SettingsIcon/></button>
-        <button className="footer-btn"><BellIcon/></button>
+        <NavLink to="/admin/notifications" className="footer-btn bell-wrap" title="Thong bao">
+          <BellIcon/>
+          {unread > 0 && <span className="admin-badge">{unread > 9 ? '9+' : unread}</span>}
+        </NavLink>
         <button className="footer-btn logout" onClick={onLogout}><LogoutIcon/></button>
       </div>
     </div>
@@ -359,7 +362,7 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
                 {DAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}
               </select>
             </div>
-
+            <br></br>
             <div className="form-group">
               <label>Giờ bắt đầu</label>
               <input type="time" value={form.start_time} onChange={e => set('start_time', e.target.value)} />
@@ -740,6 +743,84 @@ const AdminHome = ({ user, stats }) => (
   </div>
 );
 
+const timeAgo = (dateStr) => {
+  if (!dateStr) return '';
+  const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
+  if (diff < 60) return 'Vua xong';
+  if (diff < 3600) return `${Math.floor(diff / 60)} phut truoc`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} gio truoc`;
+  return `${Math.floor(diff / 86400)} ngay truoc`;
+};
+
+const AdminNotifications = ({ onRead }) => {
+  const [notifications, setNotifications] = useState([]);
+  const [unread, setUnread] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const r = await axios.get(`${API}/admin/notifications`);
+      setNotifications(r.data.notifications || []);
+      setUnread(r.data.unread || 0);
+    } catch {
+      setNotifications([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchNotifications(); }, [fetchNotifications]);
+
+  const markRead = async (id) => {
+    await axios.put(`${API}/admin/notifications/${id}/read`).catch(() => {});
+    fetchNotifications();
+    onRead?.();
+  };
+
+  const readAll = async () => {
+    await axios.put(`${API}/admin/notifications/read-all`).catch(() => {});
+    fetchNotifications();
+    onRead?.();
+  };
+
+  return (
+    <div className="page-content">
+      <div className="page-header-row">
+        <div>
+          <h1 className="page-title">Thong bao</h1>
+          <p className="page-subtitle">{unread > 0 ? `${unread} thong bao chua doc` : 'Tat ca da doc'}</p>
+        </div>
+        {unread > 0 && (
+          <button className="btn-primary" onClick={readAll}>Danh dau da doc</button>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="loading-state">Dang tai thong bao...</div>
+      ) : notifications.length === 0 ? (
+        <div className="loading-state">Chua co thong bao nao</div>
+      ) : (
+        <div className="admin-noti-list">
+          {notifications.map(n => (
+            <button
+              key={n.id}
+              className={`admin-noti-card ${!n.is_read ? 'unread' : ''}`}
+              onClick={() => !n.is_read && markRead(n.id)}
+            >
+              <div className="admin-noti-head">
+                <strong>{n.title}</strong>
+                <span>{timeAgo(n.created_at)}</span>
+              </div>
+              <div className="admin-noti-message">{n.message}</div>
+              {n.sender_name && <div className="admin-noti-sender">Nguoi gui: {n.sender_name}</div>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ================================================================
 // REGISTER PAGE
 // ================================================================
@@ -812,10 +893,24 @@ export default function AdminDashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
+  const [unread, setUnread] = useState(0);
 
   useEffect(() => {
     axios.get(`${API}/admin/dashboard`).then(r => setStats(r.data.stats)).catch(()=>{});
   }, []);
+
+  const fetchUnread = useCallback(async () => {
+    try {
+      const r = await axios.get(`${API}/admin/notifications`);
+      setUnread(r.data.unread || 0);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    fetchUnread();
+    const t = setInterval(fetchUnread, 30000);
+    return () => clearInterval(t);
+  }, [fetchUnread]);
 
   const handleLogout = () => { logout(); navigate('/login'); };
 
@@ -830,10 +925,11 @@ export default function AdminDashboard() {
 
   return (
     <div className="dashboard-layout">
-      <Sidebar user={user} onLogout={handleLogout}/>
+      <Sidebar user={user} unread={unread} onLogout={handleLogout}/>
       <main className="main-content">
         <Routes>
           <Route path="/"              element={<AdminHome user={user} stats={stats}/>}/>
+          <Route path="/notifications" element={<AdminNotifications onRead={fetchUnread}/>}/>
           <Route path="/register"      element={<RegisterPage/>}/>
           <Route path="/classes/vip"   element={<ClassesPage type="vip"/>}/>
           <Route path="/classes/trial" element={<ClassesPage type="trial"/>}/>
