@@ -163,14 +163,14 @@ const getClassLinkHref = (link) => {
 const ConfirmModal = ({ item, onConfirm, onCancel, loading }) => (
   <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onCancel()}>
     <div className="modal confirm-modal">
-      <div className="confirm-icon">🗑️</div>
+      <div className="confirm-icon"></div>
       <h3 className="confirm-title">Xác nhận xóa</h3>
       <p className="confirm-msg">
         Bạn có chắc muốn xóa lớp <strong>"{item?.name}"</strong>?<br/>
         <span className="confirm-warn">Hành động này không thể hoàn tác.</span>
       </p>
       <div className="confirm-btns">
-        <button className="btn-secondary" onClick={onCancel}>Hủy bỏ</button>
+        <button className="btn-secondary" onClick={onCancel}>Hủy b⭐</button>
         <button className="btn-danger" onClick={onConfirm} disabled={loading}>
           {loading ? 'Đang xóa...' : 'Xóa lớp'}
         </button>
@@ -182,14 +182,16 @@ const ConfirmModal = ({ item, onConfirm, onCancel, loading }) => (
 // ---- Class Form Modal (Thêm / Sửa) ----
 const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
   const DAYS = ['Chủ nhật','Thứ 2','Thứ 3','Thứ 4','Thứ 5','Thứ 6','Thứ 7'];
-  const emptyForm = { name:'', type:'vip', description:'', class_link:'', max_students:30, teacher_id:'', day_of_week:'1', start_time:'18:00', end_time:'18:45' };
+  const emptyForm = { name:'', type:'vip', description:'', trial_student_name:'', class_link:'', max_students:30, total_sessions:10, teacher_id:'', day_of_week:'1', start_time:'18:00', end_time:'18:45' };
 
   const [form, setForm] = useState(initial ? {
     name:         initial.name || '',
     type:         initial.type || 'vip',
     description:  initial.description || '',
+    trial_student_name: initial.trial_student_name || '',
     class_link:   initial.class_link || '',
     max_students: initial.max_students || 30,
+    total_sessions: initial.total_sessions || 10,
     teacher_id:   initial.teacher_id || '',
     day_of_week:  String(initial.day_of_week ?? '1'),
     start_time:   initial.start_time?.substring(0,5) || '18:00',
@@ -210,11 +212,16 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const maxSt = Number(form.max_students) || 30;
+  const isTrial = form.type === 'trial';
 
   // Load students
   useEffect(() => {
     setLoadingStudents(true);
-    if (mode === 'add') {
+    if (isTrial) {
+      setAllStudents([]);
+      setExistingStudents([]);
+      setLoadingStudents(false);
+    } else if (mode === 'add') {
       axios.get(`${API}/admin/students/all`)
         .then(r => setAllStudents(r.data.students || []))
         .catch(() => setAllStudents([]))
@@ -229,7 +236,7 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
         setAllStudents(av.data.students || []);
       }).catch(() => {}).finally(() => setLoadingStudents(false));
     }
-  }, [mode, initial]);
+  }, [mode, initial, isTrial]);
 
   const toggleStudent = (id) => {
     setSelectedIds(prev => {
@@ -260,19 +267,14 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
 
   const handleSave = async () => {
     if (!form.name.trim()) return setErr('Vui lòng nhập tên lớp');
+    if (isTrial && !form.trial_student_name.trim()) return setErr('Vui lÃ²ng nháº­p tÃªn há»⭐c sinh há»⭐c thá»­');
     setLoading(true); setErr('');
     try {
       if (mode === 'add') {
-        await axios.post(`${API}/admin/classes`, { ...form, student_ids: selectedIds });
+        await axios.post(`${API}/admin/classes`, { ...form, student_ids: isTrial ? [] : selectedIds });
       } else {
         await axios.put(`${API}/admin/classes/${initial.id}`, form);
-        if (initial.schedule_id) {
-          await axios.put(`${API}/admin/schedules/${initial.schedule_id}`, {
-            day_of_week: form.day_of_week, start_time: form.start_time,
-            end_time: form.end_time, teacher_id: form.teacher_id || initial.teacher_id,
-          });
-        }
-        if (selectedIds.length > 0) {
+        if (!isTrial && selectedIds.length > 0) {
           await axios.post(`${API}/admin/classes/${initial.id}/enroll`, { student_ids: selectedIds });
         }
       }
@@ -290,7 +292,7 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal class-modal">
         <div className="modal-header">
-          <h3 className="modal-title">{mode === 'add' ? '➕ Thêm lớp học mới' : '✏️ Sửa lớp học'}</h3>
+          <h3 className="modal-title">{mode === 'add' ? 'Thêm lớp học mới' : 'Sửa lớp học'}</h3>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
 
@@ -304,6 +306,17 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
               <label>Tên lớp *</label>
               <input value={form.name} onChange={e => set('name', e.target.value)} placeholder="VD: GD_ENG_001" />
             </div>
+ 
+            {isTrial && (
+              <div className="form-group full-col">
+                <label>Tên học sinh học thử *</label>
+                <input
+                  value={form.trial_student_name}
+                  onChange={e => set('trial_student_name', e.target.value)}
+                  placeholder="Nhập tên học sinh"
+                />
+              </div>
+            )}
 
             <div className="form-group">
               <label>Loại lớp</label>
@@ -313,10 +326,16 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
               </select>
             </div>
 
-            <div className="form-group">
+            <div className="form-group" style={{ display: isTrial ? 'none' : undefined }}>
               <label>Sĩ số tối đa</label>
               <input type="number" min="1" max="100" value={form.max_students}
                 onChange={e => set('max_students', e.target.value)} />
+            </div>
+
+            <div className="form-group" style={{ display: isTrial ? 'none' : undefined }}>
+              <label>Tổng số buổi học</label>
+              <input type="number" min="1" max="100" value={form.total_sessions}
+                onChange={e => set('total_sessions', e.target.value)} />
             </div>
 
             <div className="form-group full-col">
@@ -359,7 +378,7 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
           </div>
 
           {/* ---- Học sinh ---- */}
-          <div className="modal-section-title" style={{marginTop:20}}>
+          {!isTrial && (<><div className="modal-section-title" style={{marginTop:20}}>
             👥 Học sinh
             <span className="student-count-chip">
               {currentTotal} / {maxSt}
@@ -378,7 +397,7 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
                       className="existing-chip-remove"
                       onClick={() => handleRemoveExisting(s.id)}
                       disabled={removingId === s.id}
-                      title="Xóa khỏi lớp"
+                      title="Xóa khọi lớp"
                     >
                       {removingId === s.id ? '...' : '×'}
                     </button>
@@ -437,7 +456,7 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
                 <button className="picker-clear" onClick={() => setSelectedIds([])}>Bỏ chọn tất cả</button>
               </div>
             )}
-          </div>
+          </div></>)}
         </div>
 
         <div className="modal-footer">
@@ -557,17 +576,19 @@ const ClassesPage = ({ type }) => {
                 <th>Tên lớp</th>
                 <th>Link lớp học</th>
                 <th>Loại</th>
+                {type === 'trial' && <th>Tên học sinh</th>}
                 <th>Giáo viên</th>
                 <th>Ngày học</th>
                 <th>Giờ học</th>
-                <th>Sĩ số tối đa</th>
+                {type !== 'trial' && <th>Sĩ số</th>}
+                {type !== 'trial' && <th>Điểm danh / Tổng buổi</th>}
                 <th>Trạng thái</th>
                 <th>Thao tác</th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={10} className="empty-row">
+                <tr><td colSpan={type === 'trial' ? 11 : 11} className="empty-row">
                   {search ? 'Không tìm thấy lớp nào' : 'Chưa có lớp học nào'}
                 </td></tr>
               ) : filtered.map((cls, i) => (
@@ -584,12 +605,14 @@ const ClassesPage = ({ type }) => {
                     )}
                   </td>
                   <td><TypeBadge type={cls.type}/></td>
+                  {type === 'trial' && <td>{cls.trial_student_name || <span className="td-empty">Chưa có</span>}</td>}
                   <td>{cls.teacher_name || <span className="td-empty">Chưa có</span>}</td>
                   <td>{cls.day_of_week != null ? DAYS_SHORT[cls.day_of_week] : '—'}</td>
                   <td className="td-time">
                     {cls.start_time ? `${cls.start_time.substring(0,5)} - ${cls.end_time?.substring(0,5)}` : '—'}
                   </td>
-                  <td className="td-center">{cls.max_students}</td>
+                  {type !== 'trial' && <td className="td-center">{cls.student_count}</td>}
+                  {type !== 'trial' && <td className="td-center">{cls.session_count ?? 0}/{cls.total_sessions || 10}</td>}
                   <td><StatusBadge val={cls.is_active}/></td>
                   <td>
                     <div className="action-btns">
@@ -707,11 +730,11 @@ const AdminHome = ({ user, stats }) => (
     {stats && (
       <div className="stats-grid">
         <StatCard label="Tổng tài khoản"    value={stats.total_users}    color="#2d7a3a" icon="👤"/>
-        <StatCard label="Giáo viên"          value={stats.total_teachers} color="#1565C0" icon="👨‍🏫"/>
+        <StatCard label="Giáo viên"          value={stats.total_teachers} color="#1565C0" icon="GV"/>
         <StatCard label="Học viên"           value={stats.total_students} color="#6A1B9A" icon="🎓"/>
         <StatCard label="Lớp VIP"            value={stats.vip_classes}    color="#E65100" icon="⭐"/>
         <StatCard label="Lớp Trải nghiệm"   value={stats.trial_classes}  color="#00838F" icon="📅"/>
-        <StatCard label="Tổng lớp học"       value={stats.total_classes}  color="#2E7D32" icon="🏫"/>
+        <StatCard label="Tổng lớp học"       value={stats.total_classes}  color="#2E7D32" icon="⭐�"/>
       </div>
     )}
   </div>
@@ -767,6 +790,7 @@ const RegisterPage = () => {
             <select value={form.role} onChange={e => setForm({...form, role: e.target.value})}>
               <option value="student">Học viên</option>
               <option value="teacher">Giáo viên</option>
+              <option value="admission">Tư vấn tuyển sinh</option>
               <option value="admin">Admin</option>
             </select>
           </div>

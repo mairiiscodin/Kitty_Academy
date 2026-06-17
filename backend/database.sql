@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS users (
   username VARCHAR(100) NOT NULL UNIQUE,
   password VARCHAR(255) NOT NULL,
   full_name VARCHAR(200) NOT NULL,
-  role ENUM('admin', 'teacher', 'student') DEFAULT 'student',
+  role ENUM('admin', 'teacher', 'student', 'admission') DEFAULT 'student',
   email VARCHAR(200),
   avatar VARCHAR(255),
   is_active BOOLEAN DEFAULT TRUE,
@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS classes (
   type ENUM('vip', 'trial') NOT NULL DEFAULT 'trial',
   teacher_id INT,
   description TEXT,
+  trial_student_name VARCHAR(200),
   max_students INT DEFAULT 30,
   is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

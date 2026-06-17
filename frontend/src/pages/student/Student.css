@@ -267,6 +267,22 @@
 .s-cls-details { display: flex; flex-direction: column; gap: 8px; }
 .s-cls-detail-row { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; color: #5a7a5e; }
 
+/* Progress Bar */
+.s-progress-bar {
+  width: 100%;
+  height: 8px;
+  background: #e2f0e4;
+  border-radius: 4px;
+  overflow: hidden;
+  flex: 1;
+}
+.s-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #2d7a3a, #1e9066);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
 /* ================================================
    GRADES PAGE
 ================================================ */

@@ -39,6 +39,7 @@ router.get('/dashboard', studentOnly, async (req, res) => {
     const [myClasses] = await db.query(
       `SELECT c.*, s.day_of_week, s.start_time, s.end_time, s.id as schedule_id,
               u.full_name as teacher_name,
+              c.total_sessions,
               (SELECT COUNT(DISTINCT sc.session_date) FROM session_comments sc WHERE sc.class_id = c.id) as class_session_count,
               (SELECT COUNT(*) FROM session_comments sc WHERE sc.class_id = c.id AND sc.student_id = st.user_id) as recorded_sessions,
               (SELECT COUNT(*) FROM session_comments sc WHERE sc.class_id = c.id AND sc.student_id = st.user_id AND sc.attendance IN ('present','late')) as learned_sessions,

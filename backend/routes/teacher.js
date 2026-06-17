@@ -416,6 +416,33 @@ router.post('/cancel-request/:id/respond', teacherOnly, async (req, res) => {
           requestId
         ]
       );
+
+      // Thông báo cho admin
+      const [requestingTeacher] = await db.query(
+        'SELECT full_name FROM users WHERE id = ?',
+        [req_data.requesting_teacher_id]
+      );
+      const requestingTeacherName = requestingTeacher[0]?.full_name || 'Không xác định';
+      
+      const [admins] = await db.query(
+        'SELECT id FROM users WHERE role = ? AND is_active = TRUE',
+        ['admin']
+      );
+      
+      for (const admin of admins) {
+        await db.query(
+          `INSERT INTO notifications (user_id, sender_id, type, title, message, cancel_request_id)
+           VALUES (?, ?, 'request_accepted', ?, ?, ?)`,
+          [
+            admin.id,
+            req.user.id,
+            `📋 Giáo viên dạy thay được chấp nhận`,
+            `${requestingTeacherName} đã gửi yêu cầu dạy thay lớp "${req_data.class_name}" (${dayStr} ${timeStr}) cho ${req.user.full_name}. Yêu cầu đã được chấp nhận và lịch dạy đã được cập nhật.`,
+            requestId
+          ]
+        );
+      }
+
       res.json({ success: true, message: 'Đã chấp nhận dạy thay. Lịch đã được chuyển nhượng!' });
 
     } else {

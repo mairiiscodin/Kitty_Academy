@@ -25,4 +25,11 @@ const adminOnly = (req, res, next) => {
   next();
 };
 
-module.exports = { authMiddleware, adminOnly };
+const admissionOnly = (req, res, next) => {
+  if (req.user?.role !== 'admission') {
+    return res.status(403).json({ success: false, message: 'Chi tu van tuyen sinh moi co quyen truy cap' });
+  }
+  next();
+};
+
+module.exports = { authMiddleware, adminOnly, admissionOnly };

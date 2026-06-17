@@ -47,8 +47,11 @@ export function StudentMyClasses() {
                     <span>buổi đã học</span>
                   </div>
                   <div>
-                    <strong>{cls.class_session_count ?? 0}</strong>
-                    <span>buổi của lớp</span>
+                    <strong>{cls.total_sessions ?? 10}</strong>
+                    <span>tổng buổi</span>
+                  </div>
+                  <div className="s-progress-bar">
+                    <div className="s-progress-fill" style={{width: `${cls.total_sessions ? Math.round((cls.learned_sessions / cls.total_sessions) * 100) : 0}%`}}></div>
                   </div>
                   {(cls.absent_sessions ?? 0) > 0 && (
                     <div>

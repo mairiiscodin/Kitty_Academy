@@ -1,0 +1,29 @@
+@import '../AdminDashboard.css';
+
+.admission-total-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admission-total-input {
+  width: 76px;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid #d8e2db;
+  border-radius: 6px;
+  font: inherit;
+  text-align: center;
+}
+
+.admission-total-input:focus {
+  outline: none;
+  border-color: #1e9066;
+  box-shadow: 0 0 0 3px rgba(30, 144, 102, 0.12);
+}
+
+.admission-readonly {
+  color: #8a948f;
+  font-size: 12px;
+  white-space: nowrap;
+}
