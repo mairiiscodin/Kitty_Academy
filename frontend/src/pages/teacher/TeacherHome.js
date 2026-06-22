@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 import './Teacher.css';
@@ -26,6 +26,29 @@ function getSlotIndex(start) {
   const map = { '18:00': 0, '18:45': 1, '19:30': 2, '20:15': 3 };
   return map[h] ?? -1;
 }
+function scheduleLabel(schedule) {
+  return `${DAYS_VI[schedule.day_of_week]} ${fmtTime(schedule.start_time)} - ${fmtTime(schedule.end_time)}`;
+}
+function groupClassesById(rows) {
+  const byId = new Map();
+  rows.forEach(row => {
+    const schedule = {
+      schedule_id: row.schedule_id,
+      day_of_week: row.day_of_week,
+      start_time: row.start_time,
+      end_time: row.end_time,
+    };
+    if (!byId.has(row.id)) byId.set(row.id, { ...row, schedules: [] });
+    const grouped = byId.get(row.id);
+    if (schedule.schedule_id && !grouped.schedules.some(s => s.schedule_id === schedule.schedule_id)) {
+      grouped.schedules.push(schedule);
+    }
+  });
+  return Array.from(byId.values()).map(row => ({
+    ...row,
+    schedules: row.schedules.sort((a, b) => Number(a.day_of_week) - Number(b.day_of_week) || String(a.start_time).localeCompare(String(b.start_time))),
+  }));
+}
 
 // Màu cho từng lớp
 const CLASS_COLORS = ['#c8e6c9', '#b2dfdb', '#bbdefb', '#f8bbd0', '#fff9c4', '#e1bee7'];
@@ -36,6 +59,7 @@ export default function TeacherHome() {
   const [schedule, setSchedule] = useState([]);
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
+  const [selectedClassId, setSelectedClassId] = useState(null);
 
   useEffect(() => {
     axios.get(`${API}/teacher/dashboard`)
@@ -62,6 +86,14 @@ export default function TeacherHome() {
       colorMap[s.class_id] = CLASS_COLORS[colorIdx++ % CLASS_COLORS.length];
     }
   });
+  const groupedClasses = useMemo(() => groupClassesById(myClasses), [myClasses]);
+  const selectedClass = groupedClasses.find(cls => String(cls.id) === String(selectedClassId)) || groupedClasses[0];
+
+  useEffect(() => {
+    if (groupedClasses.length > 0 && !groupedClasses.some(cls => String(cls.id) === String(selectedClassId))) {
+      setSelectedClassId(groupedClasses[0].id);
+    }
+  }, [groupedClasses, selectedClassId]);
 
   if (loading) return <div className="t-loading">Đang tải...</div>;
 
@@ -96,54 +128,63 @@ export default function TeacherHome() {
             </svg>
             <span>Lớp học của tôi</span>
           </div>
-          <div className="t-class-list">
-            {myClasses.length === 0 && (
+          <div className="t-home-class-page">
+            {groupedClasses.length === 0 && (
               <div className="t-empty">Chưa có lớp học nào</div>
             )}
-            {myClasses.map((cls, i) => (
-              <div className="t-class-card" key={cls.schedule_id || i}>
-                <div className="t-class-icon">
-                  <svg width="28" height="28" viewBox="0 0 48 48" fill="none">
-                    <rect x="4" y="8" width="40" height="32" rx="4" fill="#2d7a3a" opacity="0.15" />
-                    <rect x="4" y="8" width="40" height="32" rx="4" stroke="#2d7a3a" strokeWidth="2" />
-                    <line x1="4" y1="18" x2="44" y2="18" stroke="#2d7a3a" strokeWidth="2" />
-                    <circle cx="24" cy="30" r="6" fill="#2d7a3a" opacity="0.4" />
-                  </svg>
+            {groupedClasses.length > 0 && selectedClass && (
+              <>
+                <div className="t-home-class-tabs">
+                  {groupedClasses.map(cls => (
+                    <button
+                      key={cls.id}
+                      className={`t-home-class-tab ${String(cls.id) === String(selectedClass.id) ? 'active' : ''}`}
+                      onClick={() => setSelectedClassId(cls.id)}
+                    >
+                      {cls.name}
+                    </button>
+                  ))}
                 </div>
-                <div className="t-class-info">
-                  <div className="t-class-name">{cls.name}</div>
-                  <div className="t-class-meta">
-                    <span>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" />
-                      </svg>
-                      {cls.student_count ?? 0} học viên
-                    </span>
-                    <span>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
-                      </svg>
-                      {fmtTime(cls.start_time)} - {fmtTime(cls.end_time)}
+
+                <div className="t-home-class-detail">
+                  <div className="t-home-class-head">
+                    <div>
+                      <div className="t-class-eyebrow">{selectedClass.type === 'vip' ? 'Lớp VIP' : 'Lớp trải nghiệm'}</div>
+                      <div className="t-home-class-name">{selectedClass.name}</div>
+                    </div>
+                    <span className={`t-type-badge ${selectedClass.type}`}>
+                      {selectedClass.type === 'vip' ? 'VIP' : 'Thu'}
                     </span>
                   </div>
-                  <div className="t-class-day">{DAYS_VI[cls.day_of_week]}</div>
-                  {cls.class_link && (
-                    <a
-                      className="t-class-link compact"
-                      href={getClassLinkHref(cls.class_link)}
-                      target="_blank"
-                      rel="noreferrer"
-                      title={cls.class_link}
-                    >
-                      Vào lớp học
-                    </a>
-                  )}
+
+                  <div className="t-home-class-stats">
+                    <div><span>Học viên</span><strong>{selectedClass.student_count ?? 0}</strong></div>
+                    <div><span>Buổi đã dạy</span><strong>{selectedClass.session_count ?? 0}</strong></div>
+                    <div><span>Tổng buổi</span><strong>{selectedClass.total_sessions || 10}</strong></div>
+                  </div>
+
+                  <div className="t-home-class-block">
+                    <label>Lịch học</label>
+                    <div className="t-schedule-list">
+                      {selectedClass.schedules.map(item => (
+                        <span className="t-schedule-chip" key={item.schedule_id}>{scheduleLabel(item)}</span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="t-home-class-block">
+                    <label>Link lop hoc</label>
+                    {selectedClass.class_link ? (
+                      <a className="t-class-link compact" href={getClassLinkHref(selectedClass.class_link)} target="_blank" rel="noreferrer" title={selectedClass.class_link}>
+                        Vào lớp học
+                      </a>
+                    ) : (
+                      <span className="t-muted">Chưa có link</span>
+                    )}
+                  </div>
                 </div>
-                <span className={`t-type-badge ${cls.type}`}>
-                  {cls.type === 'vip' ? 'VIP' : 'Thử'}
-                </span>
-              </div>
-            ))}
+              </>
+            )}
           </div>
         </div>
 

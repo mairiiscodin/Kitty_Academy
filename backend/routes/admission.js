@@ -12,6 +12,32 @@ const logDbError = (label, err) => {
   console.error('sql:', err.sql);
 };
 
+const toUsernameBase = (name) => {
+  const normalized = name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '')
+    .slice(0, 18);
+
+  return normalized || 'hocvien';
+};
+
+const createUniqueStudentUsername = async (conn, fullName) => {
+  const base = toUsernameBase(fullName);
+
+  for (let i = 0; i < 20; i++) {
+    const suffix = Date.now().toString().slice(-5) + (i || '');
+    const username = `${base}${suffix}`;
+    const [[existing]] = await conn.query('SELECT id FROM users WHERE username=? LIMIT 1', [username]);
+    if (!existing) return username;
+  }
+
+  return `hocvien${Date.now()}`;
+};
+
 router.use(authMiddleware, admissionOnly);
 
 router.get('/dashboard', async (req, res) => {
@@ -22,7 +48,7 @@ router.get('/dashboard', async (req, res) => {
     const [[{ total_students }]] = await db.query("SELECT COUNT(*) as total_students FROM users WHERE role='student' AND is_active=TRUE");
     res.json({ success: true, stats: { total_classes, vip_classes, trial_classes, total_students } });
   } catch (err) {
-    res.status(500).json({ success: false, message: 'Loi server' });
+    res.status(500).json({ success: false, message: 'Lỗi server' });
   }
 });
 
@@ -41,7 +67,7 @@ router.get('/classes', async (req, res) => {
     `);
     res.json({ success: true, classes: rows });
   } catch (err) {
-    res.status(500).json({ success: false, message: 'Loi server' });
+    res.status(500).json({ success: false, message: 'Lỗi server' });
   }
 });
 
@@ -70,10 +96,10 @@ const checkTeacherScheduleConflict = async (conn, teacherId, dayOfWeek, startTim
 router.post('/classes', async (req, res) => {
   const { name, type, description, trial_student_name, class_link, teacher_id, day_of_week, start_time, end_time } = req.body;
   if (type !== 'trial') {
-    return res.status(403).json({ success: false, message: 'Tu van tuyen sinh chi duoc tao lop trai nghiem' });
+    return res.status(403).json({ success: false, message: 'Tư vấn tuyển sinh chỉ được tạo lớp trải nghiệm' });
   }
   if (!name || !trial_student_name?.trim()) {
-    return res.status(400).json({ success: false, message: 'Vui long nhap ten lop va ten hoc sinh' });
+    return res.status(400).json({ success: false, message: 'Vui lòng nhập tên lớp và tên học sinh' });
   }
 
   const conn = await db.getConnection();
@@ -85,7 +111,7 @@ router.post('/classes', async (req, res) => {
       const hasConflict = await checkTeacherScheduleConflict(conn, teacher_id, day_of_week, start_time, end_time);
       if (hasConflict) {
         await conn.rollback();
-        return res.status(400).json({ success: false, message: 'Giao vien da co lop khac vao thoi gian nay' });
+        return res.status(400).json({ success: false, message: 'Giáo viên đã có lớp khác vào thời gian này' });
       }
     }
 
@@ -103,11 +129,11 @@ router.post('/classes', async (req, res) => {
     }
 
     await conn.commit();
-    res.json({ success: true, message: 'Da tao lop trai nghiem', id: classId });
+    res.json({ success: true, message: 'Đã tạo lớp trải nghiệm', id: classId });
   } catch (err) {
     await conn.rollback();
     logDbError('ADMISSION CREATE CLASS ERROR', err);
-    res.status(500).json({ success: false, message: err.sqlMessage || err.message || 'Loi server' });
+    res.status(500).json({ success: false, message: err.sqlMessage || err.message || 'Lỗi server' });
   } finally {
     conn.release();
   }
@@ -116,10 +142,10 @@ router.post('/classes', async (req, res) => {
 router.put('/classes/:id', async (req, res) => {
   const { name, type, description, trial_student_name, class_link, teacher_id, day_of_week, start_time, end_time } = req.body;
   if (type !== 'trial') {
-    return res.status(403).json({ success: false, message: 'Tu van tuyen sinh chi duoc sua lop trai nghiem' });
+    return res.status(403).json({ success: false, message: 'Tư vấn tuyển sinh chỉ được sửa lớp trải nghiệm' });
   }
   if (!name || !trial_student_name?.trim()) {
-    return res.status(400).json({ success: false, message: 'Vui long nhap ten lop va ten hoc sinh' });
+    return res.status(400).json({ success: false, message: 'Vui lòng nhập tên lớp và tên học sinh' });
   }
 
   const classId = req.params.id;
@@ -133,7 +159,7 @@ router.put('/classes/:id', async (req, res) => {
       const hasConflict = await checkTeacherScheduleConflict(conn, teacherId, day_of_week, start_time, end_time, classId);
       if (hasConflict) {
         await conn.rollback();
-        return res.status(400).json({ success: false, message: 'Giao vien da co lop khac vao thoi gian nay' });
+        return res.status(400).json({ success: false, message: 'Giáo viên đã có lớp khác vào thời gian này' });
       }
     }
 
@@ -143,7 +169,7 @@ router.put('/classes/:id', async (req, res) => {
     );
     if (result.affectedRows === 0) {
       await conn.rollback();
-      return res.status(404).json({ success: false, message: 'Khong tim thay lop trai nghiem' });
+      return res.status(404).json({ success: false, message: 'Không tìm thấy lớp trải nghiệm' });
     }
 
     if (teacherId) {
@@ -164,11 +190,11 @@ router.put('/classes/:id', async (req, res) => {
     }
 
     await conn.commit();
-    res.json({ success: true, message: 'Da cap nhat lop trai nghiem' });
+    res.json({ success: true, message: 'Đã cập nhật lớp trải nghiệm' });
   } catch (err) {
     logDbError('ADMISSION UPDATE CLASS ERROR', err);
     await conn.rollback();
-    res.status(500).json({ success: false, message: err.sqlMessage || err.message || 'Loi server' });
+    res.status(500).json({ success: false, message: err.sqlMessage || err.message || 'Lỗi server' });
   } finally {
     conn.release();
   }
@@ -181,11 +207,11 @@ router.delete('/classes/:id', async (req, res) => {
       [req.params.id]
     );
     if (result.affectedRows === 0) {
-      return res.status(404).json({ success: false, message: 'Khong tim thay lop trai nghiem' });
+      return res.status(404).json({ success: false, message: 'Không tìm thấy lớp trải nghiệm' });
     }
-    res.json({ success: true, message: 'Da xoa lop trai nghiem' });
+    res.json({ success: true, message: 'Đã xóa lớp trải nghiệm' });
   } catch (err) {
-    res.status(500).json({ success: false, message: 'Loi server' });
+    res.status(500).json({ success: false, message: 'Lỗi server' });
   }
 });
 
@@ -201,11 +227,11 @@ router.put('/classes/:id/total-sessions', async (req, res) => {
       [totalSessions, req.params.id]
     );
     if (result.affectedRows === 0) {
-      return res.status(404).json({ success: false, message: 'Khong tim thay lop trai nghiem' });
+      return res.status(404).json({ success: false, message: 'Không tìm thấy lớp trải nghiệm' });
     }
-    res.json({ success: true, message: 'Da cap nhat tong so buoi' });
+    res.json({ success: true, message: 'Đã cập nhật tổng số buổi' });
   } catch (err) {
-    res.status(500).json({ success: false, message: 'Loi server' });
+    res.status(500).json({ success: false, message: 'Lỗi server' });
   }
 });
 
@@ -216,18 +242,74 @@ router.get('/teachers', async (req, res) => {
     );
     res.json({ success: true, teachers: rows });
   } catch (err) {
-    res.status(500).json({ success: false, message: 'Loi server' });
+    res.status(500).json({ success: false, message: 'Lỗi server' });
   }
 });
 
 router.get('/students', async (req, res) => {
   try {
     const [rows] = await db.query(
-      "SELECT id, username, full_name, email, is_active, created_at FROM users WHERE role='student' ORDER BY created_at DESC"
+      `SELECT u.id, u.username, u.full_name, u.email, u.is_active, u.created_at,
+              GROUP_CONCAT(c.name ORDER BY c.name SEPARATOR ', ') as class_names
+       FROM users u
+       LEFT JOIN students st ON st.user_id = u.id
+       LEFT JOIN classes c ON c.id = st.class_id AND c.is_active = TRUE
+       WHERE u.role='student'
+       GROUP BY u.id, u.username, u.full_name, u.email, u.is_active, u.created_at
+       ORDER BY u.created_at DESC`
     );
     res.json({ success: true, students: rows });
   } catch (err) {
-    res.status(500).json({ success: false, message: 'Loi server' });
+    res.status(500).json({ success: false, message: 'Lỗi server' });
+  }
+});
+
+router.post('/students', async (req, res) => {
+  const fullName = req.body.full_name?.trim();
+  if (!fullName) {
+    return res.status(400).json({ success: false, message: 'Vui lòng nhập tên học viên' });
+  }
+
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const username = await createUniqueStudentUsername(conn, fullName);
+    const password = '123456';
+    const [result] = await conn.query(
+      "INSERT INTO users (username, password, full_name, role, email) VALUES (?, ?, ?, 'student', NULL)",
+      [username, password, fullName]
+    );
+
+    const [admins] = await conn.query(
+      "SELECT id FROM users WHERE role='admin' AND is_active=TRUE"
+    );
+    if (admins.length > 0) {
+      const values = admins.map(admin => [
+        admin.id,
+        req.user.id,
+        'system',
+        'Học viên mới từ tư vấn tuyển sinh',
+        `Tư vấn tuyển sinh đã thêm học viên "${fullName}". Vui lòng hoàn thiện thông tin tài khoản trong Quản lý tài khoản.`
+      ]);
+      await conn.query(
+        'INSERT INTO notifications (user_id, sender_id, type, title, message) VALUES ?',
+        [values]
+      );
+    }
+
+    await conn.commit();
+    res.json({
+      success: true,
+      message: 'Đã thêm học viên và gửi thông báo cho admin',
+      student: { id: result.insertId, username, full_name: fullName, password }
+    });
+  } catch (err) {
+    await conn.rollback();
+    logDbError('ADMISSION CREATE STUDENT ERROR', err);
+    res.status(500).json({ success: false, message: err.sqlMessage || err.message || 'Lỗi server' });
+  } finally {
+    conn.release();
   }
 });
 

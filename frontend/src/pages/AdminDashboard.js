@@ -23,6 +23,12 @@ const UserPlusIcon = () => (
     <line x1="20" y1="8" x2="20" y2="14"/><line x1="17" y1="11" x2="23" y2="11"/>
   </svg>
 );
+const UsersIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+    <path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/>
+  </svg>
+);
 const CrownIcon    = () => <Icon d="M2 20h20 M4 20L6 10l6 5 6-5 2 10"/>;
 const CalendarIcon = () => <Icon d="M8 2v4M16 2v4M3 8h18M3 6a2 2 0 012-2h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6z"/>;
 const TeacherIcon  = () => (
@@ -77,8 +83,8 @@ const Sidebar = ({ user, unread, onLogout }) => {
               <NavLink to="/admin" end className={({isActive}) => `nav-item ${isActive?'active':''}`}>
                 <HomeIcon/> Trang chủ
               </NavLink>
-              <NavLink to="/admin/register" className={({isActive}) => `nav-item ${isActive?'active':''}`}>
-                <UserPlusIcon/> Đăng kí tài khoản
+              <NavLink to="/admin/accounts" className={({isActive}) => `nav-item ${isActive?'active':''}`}>
+                <UsersIcon/> Quản lý tài khoản
               </NavLink>
             </div>
           )}
@@ -129,7 +135,7 @@ const Sidebar = ({ user, unread, onLogout }) => {
 
       <div className="sidebar-footer">
         <button className="footer-btn"><SettingsIcon/></button>
-        <NavLink to="/admin/notifications" className="footer-btn bell-wrap" title="Thong bao">
+        <NavLink to="/admin/notifications" className="footer-btn bell-wrap" title="Thông báo">
           <BellIcon/>
           {unread > 0 && <span className="admin-badge">{unread > 9 ? '9+' : unread}</span>}
         </NavLink>
@@ -163,19 +169,19 @@ const getClassLinkHref = (link) => {
 };
 
 // ---- Confirm Delete Modal ----
-const ConfirmModal = ({ item, onConfirm, onCancel, loading }) => (
+const ConfirmModal = ({ item, onConfirm, onCancel, loading, title = 'Xác nhận xóa', message, confirmText = 'Xóa lớp' }) => (
   <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onCancel()}>
     <div className="modal confirm-modal">
       <div className="confirm-icon"></div>
-      <h3 className="confirm-title">Xác nhận xóa</h3>
+      <h3 className="confirm-title">{title}</h3>
       <p className="confirm-msg">
-        Bạn có chắc muốn xóa lớp <strong>"{item?.name}"</strong>?<br/>
+        {message || <>Bạn có chắc muốn xóa lớp <strong>"{item?.name}"</strong>?</>}<br/>
         <span className="confirm-warn">Hành động này không thể hoàn tác.</span>
       </p>
       <div className="confirm-btns">
-        <button className="btn-secondary" onClick={onCancel}>Hủy b⭐</button>
+        <button className="btn-secondary" onClick={onCancel}>Hủy bỏ</button>
         <button className="btn-danger" onClick={onConfirm} disabled={loading}>
-          {loading ? 'Đang xóa...' : 'Xóa lớp'}
+          {loading ? 'Đang xóa...' : confirmText}
         </button>
       </div>
     </div>
@@ -185,7 +191,19 @@ const ConfirmModal = ({ item, onConfirm, onCancel, loading }) => (
 // ---- Class Form Modal (Thêm / Sửa) ----
 const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
   const DAYS = ['Chủ nhật','Thứ 2','Thứ 3','Thứ 4','Thứ 5','Thứ 6','Thứ 7'];
-  const emptyForm = { name:'', type:'vip', description:'', trial_student_name:'', class_link:'', max_students:30, total_sessions:10, teacher_id:'', day_of_week:'1', start_time:'18:00', end_time:'18:45' };
+  const defaultSchedules = [{ day_of_week:'1', start_time:'18:00', end_time:'18:45' }];
+  const initialSchedules = initial?.schedules?.length
+    ? initial.schedules.map(s => ({
+      day_of_week: String(s.day_of_week ?? '1'),
+      start_time: s.start_time?.substring(0,5) || '18:00',
+      end_time: s.end_time?.substring(0,5) || '18:45',
+    }))
+    : (initial?.day_of_week != null ? [{
+      day_of_week: String(initial.day_of_week),
+      start_time: initial.start_time?.substring(0,5) || '18:00',
+      end_time: initial.end_time?.substring(0,5) || '18:45',
+    }] : defaultSchedules);
+  const emptyForm = { name:'', type:'vip', description:'', trial_student_name:'', class_link:'', max_students:30, total_sessions:10, teacher_id:'', schedules: defaultSchedules };
 
   const [form, setForm] = useState(initial ? {
     name:         initial.name || '',
@@ -196,9 +214,7 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
     max_students: initial.max_students || 30,
     total_sessions: initial.total_sessions || 10,
     teacher_id:   initial.teacher_id || '',
-    day_of_week:  String(initial.day_of_week ?? '1'),
-    start_time:   initial.start_time?.substring(0,5) || '18:00',
-    end_time:     initial.end_time?.substring(0,5) || '18:45',
+    schedules:    initialSchedules,
   } : emptyForm);
 
   // Student picker state
@@ -214,6 +230,28 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
   const [err, setErr]         = useState('');
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  const setSchedule = (index, key, value) => {
+    setForm(prev => ({
+      ...prev,
+      schedules: prev.schedules.map((schedule, i) => (
+        i === index ? { ...schedule, [key]: value } : schedule
+      )),
+    }));
+  };
+  const addSchedule = () => {
+    setForm(prev => ({
+      ...prev,
+      schedules: [...prev.schedules, { day_of_week:'1', start_time:'18:00', end_time:'18:45' }],
+    }));
+  };
+  const removeSchedule = (index) => {
+    setForm(prev => ({
+      ...prev,
+      schedules: prev.schedules.length > 1
+        ? prev.schedules.filter((_, i) => i !== index)
+        : prev.schedules,
+    }));
+  };
   const maxSt = Number(form.max_students) || 30;
   const isTrial = form.type === 'trial';
 
@@ -270,13 +308,30 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
 
   const handleSave = async () => {
     if (!form.name.trim()) return setErr('Vui lòng nhập tên lớp');
-    if (isTrial && !form.trial_student_name.trim()) return setErr('Vui lÃ²ng nháº­p tÃªn há»⭐c sinh há»⭐c thá»­');
+    if (isTrial && !form.trial_student_name.trim()) return setErr('Vui lòng nhập tên học sinh học thử');
+    for (const schedule of form.schedules) {
+      if (!schedule.start_time || !schedule.end_time) return setErr('Vui lòng nhập đủ giờ học');
+      if (schedule.start_time >= schedule.end_time) return setErr('Giờ kết thúc phải lớn hơn giờ bắt đầu');
+    }
+    for (let i = 0; i < form.schedules.length; i++) {
+      for (let j = i + 1; j < form.schedules.length; j++) {
+        const a = form.schedules[i];
+        const b = form.schedules[j];
+        if (a.day_of_week === b.day_of_week && a.start_time < b.end_time && a.end_time > b.start_time) {
+          return setErr('Các buổi học trong cùng lớp bị trùng giờ');
+        }
+      }
+    }
     setLoading(true); setErr('');
     try {
+      const payload = {
+        ...form,
+        schedules: form.teacher_id ? form.schedules : [],
+      };
       if (mode === 'add') {
-        await axios.post(`${API}/admin/classes`, { ...form, student_ids: isTrial ? [] : selectedIds });
+        await axios.post(`${API}/admin/classes`, { ...payload, student_ids: isTrial ? [] : selectedIds });
       } else {
-        await axios.put(`${API}/admin/classes/${initial.id}`, form);
+        await axios.put(`${API}/admin/classes/${initial.id}`, payload);
         if (!isTrial && selectedIds.length > 0) {
           await axios.post(`${API}/admin/classes/${initial.id}/enroll`, { student_ids: selectedIds });
         }
@@ -356,21 +411,31 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
               </select>
             </div>
 
-            <div className="form-group">
-              <label>Ngày học trong tuần</label>
-              <select value={form.day_of_week} onChange={e => set('day_of_week', e.target.value)}>
-                {DAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}
-              </select>
-            </div>
-            <br></br>
-            <div className="form-group">
-              <label>Giờ bắt đầu</label>
-              <input type="time" value={form.start_time} onChange={e => set('start_time', e.target.value)} />
-            </div>
-
-            <div className="form-group">
-              <label>Giờ kết thúc</label>
-              <input type="time" value={form.end_time} onChange={e => set('end_time', e.target.value)} />
+            <div className="form-group full-col">
+              <div className="schedule-header">
+                <label>Lịch học trong tuần</label>
+                <button type="button" className="mini-add-btn" onClick={addSchedule}>+ Thêm buổi</button>
+              </div>
+              <div className="schedule-list">
+                {form.schedules.map((schedule, index) => (
+                  <div className="schedule-row" key={index}>
+                    <select value={schedule.day_of_week} onChange={e => setSchedule(index, 'day_of_week', e.target.value)}>
+                      {DAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}
+                    </select>
+                    <input type="time" value={schedule.start_time} onChange={e => setSchedule(index, 'start_time', e.target.value)} />
+                    <input type="time" value={schedule.end_time} onChange={e => setSchedule(index, 'end_time', e.target.value)} />
+                    <button
+                      type="button"
+                      className="schedule-remove"
+                      onClick={() => removeSchedule(index)}
+                      disabled={form.schedules.length === 1}
+                      title="Xóa buổi học"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="form-group full-col">
@@ -426,7 +491,7 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
               <div className="picker-loading">Đang tải danh sách học sinh...</div>
             ) : filteredStudents.length === 0 ? (
               <div className="picker-empty">
-                {studentSearch ? 'Không tìm thấy học sinh' : (mode === 'edit' ? 'Tất cả học sinh đã trong lớp' : 'Chưa có học sinh nào trong hệ thống')}
+                {studentSearch ? 'Không tìm thấy học sinh' : 'Không còn học sinh chưa có lớp'}
               </div>
             ) : (
               <div className="picker-list">
@@ -536,6 +601,11 @@ const ClassesPage = ({ type }) => {
     c.name?.toLowerCase().includes(search.toLowerCase()) ||
     c.teacher_name?.toLowerCase().includes(search.toLowerCase())
   );
+  const getSchedules = (cls) => (
+    cls.schedules?.length
+      ? cls.schedules
+      : (cls.day_of_week != null ? [{ day_of_week: cls.day_of_week, start_time: cls.start_time, end_time: cls.end_time }] : [])
+  );
 
   return (
     <div className="page-content">
@@ -610,9 +680,17 @@ const ClassesPage = ({ type }) => {
                   <td><TypeBadge type={cls.type}/></td>
                   {type === 'trial' && <td>{cls.trial_student_name || <span className="td-empty">Chưa có</span>}</td>}
                   <td>{cls.teacher_name || <span className="td-empty">Chưa có</span>}</td>
-                  <td>{cls.day_of_week != null ? DAYS_SHORT[cls.day_of_week] : '—'}</td>
-                  <td className="td-time">
-                    {cls.start_time ? `${cls.start_time.substring(0,5)} - ${cls.end_time?.substring(0,5)}` : '—'}
+                  <td className="td-schedules">
+                    {getSchedules(cls).length > 0 ? getSchedules(cls).map((schedule, idx) => (
+                      <span key={idx} className="schedule-chip">{DAYS_SHORT[schedule.day_of_week]}</span>
+                    )) : '—'}
+                  </td>
+                  <td className="td-time td-schedules">
+                    {getSchedules(cls).length > 0 ? getSchedules(cls).map((schedule, idx) => (
+                      <span key={idx} className="schedule-chip">
+                        {schedule.start_time?.substring(0,5)} - {schedule.end_time?.substring(0,5)}
+                      </span>
+                    )) : '—'}
                   </td>
                   {type !== 'trial' && <td className="td-center">{cls.student_count}</td>}
                   {type !== 'trial' && <td className="td-center">{cls.session_count ?? 0}/{cls.total_sessions || 10}</td>}
@@ -703,7 +781,7 @@ const TablePage = ({ title, fetchUrl, columns }) => {
               ) : filtered.map((row, i) => (
                 <tr key={row.id || i}>
                   {columns.map(c => (
-                    <td key={c.key}>{c.render ? c.render(row[c.key], row) : (row[c.key] ?? '—')}</td>
+                    <td key={c.key}>{c.render ? c.render(row[c.key], row, i) : (row[c.key] ?? '—')}</td>
                   ))}
                 </tr>
               ))}
@@ -737,7 +815,7 @@ const AdminHome = ({ user, stats }) => (
         <StatCard label="Học viên"           value={stats.total_students} color="#6A1B9A" icon="🎓"/>
         <StatCard label="Lớp VIP"            value={stats.vip_classes}    color="#E65100" icon="⭐"/>
         <StatCard label="Lớp Trải nghiệm"   value={stats.trial_classes}  color="#00838F" icon="📅"/>
-        <StatCard label="Tổng lớp học"       value={stats.total_classes}  color="#2E7D32" icon="⭐�"/>
+        <StatCard label="Tổng lớp học"       value={stats.total_classes}  color="#2E7D32" icon="⭐"/>
       </div>
     )}
   </div>
@@ -746,10 +824,10 @@ const AdminHome = ({ user, stats }) => (
 const timeAgo = (dateStr) => {
   if (!dateStr) return '';
   const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
-  if (diff < 60) return 'Vua xong';
-  if (diff < 3600) return `${Math.floor(diff / 60)} phut truoc`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} gio truoc`;
-  return `${Math.floor(diff / 86400)} ngay truoc`;
+  if (diff < 60) return 'Vừa xong';
+  if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
+  return `${Math.floor(diff / 86400)} ngày trước`;
 };
 
 const AdminNotifications = ({ onRead }) => {
@@ -787,18 +865,18 @@ const AdminNotifications = ({ onRead }) => {
     <div className="page-content">
       <div className="page-header-row">
         <div>
-          <h1 className="page-title">Thong bao</h1>
-          <p className="page-subtitle">{unread > 0 ? `${unread} thong bao chua doc` : 'Tat ca da doc'}</p>
+          <h1 className="page-title">Thông báo</h1>
+          <p className="page-subtitle">{unread > 0 ? `${unread} thông báo chưa đọc` : 'Tất cả đã đọc'}</p>
         </div>
         {unread > 0 && (
-          <button className="btn-primary" onClick={readAll}>Danh dau da doc</button>
+          <button className="btn-primary" onClick={readAll}>Đánh dấu đã đọc</button>
         )}
       </div>
 
       {loading ? (
-        <div className="loading-state">Dang tai thong bao...</div>
+        <div className="loading-state">Đang tải thông báo...</div>
       ) : notifications.length === 0 ? (
-        <div className="loading-state">Chua co thong bao nao</div>
+        <div className="loading-state">Chưa có thông báo nào</div>
       ) : (
         <div className="admin-noti-list">
           {notifications.map(n => (
@@ -812,7 +890,7 @@ const AdminNotifications = ({ onRead }) => {
                 <span>{timeAgo(n.created_at)}</span>
               </div>
               <div className="admin-noti-message">{n.message}</div>
-              {n.sender_name && <div className="admin-noti-sender">Nguoi gui: {n.sender_name}</div>}
+              {n.sender_name && <div className="admin-noti-sender">Người gửi: {n.sender_name}</div>}
             </button>
           ))}
         </div>
@@ -822,66 +900,281 @@ const AdminNotifications = ({ onRead }) => {
 };
 
 // ================================================================
-// REGISTER PAGE
+// ACCOUNT MANAGEMENT PAGE
 // ================================================================
-const RegisterPage = () => {
-  const [form, setForm] = useState({ username:'', password:'', full_name:'', role:'student', email:'' });
-  const [msg, setMsg]   = useState(null);
+const roleLabels = {
+  admin: 'Admin',
+  admission: 'Tư vấn tuyển sinh',
+  teacher: 'Giáo viên',
+  student: 'Học viên',
+};
+
+const RoleBadge = ({ role }) => (
+  <Badge color={{
+    admin: '#6A1B9A',
+    admission: '#00838F',
+    teacher: '#1565C0',
+    student: '#2d7a3a',
+  }[role] || '#777'}>
+    {roleLabels[role] || role || '—'}
+  </Badge>
+);
+
+const AccountFormModal = ({ mode, initial, onClose, onSave }) => {
+  const [form, setForm] = useState({
+    username: initial?.username || '',
+    password: initial?.password || '',
+    full_name: initial?.full_name || '',
+    role: initial?.role || 'student',
+    email: initial?.email || '',
+    is_active: initial?.is_active ?? true,
+  });
+  const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async e => {
-    e.preventDefault(); setLoading(true); setMsg(null);
+  const set = (key, value) => setForm(prev => ({ ...prev, [key]: value }));
+
+  const handleSave = async () => {
+    if (!form.username.trim()) return setErr('Vui lòng nhập tên tài khoản');
+    if (!form.full_name.trim()) return setErr('Vui lòng nhập họ tên');
+    if (mode === 'add' && !form.password.trim()) return setErr('Vui lòng nhập mật khẩu');
+
+    setLoading(true);
+    setErr('');
     try {
-      await axios.post(`${API}/admin/users`, form);
-      setMsg({ type:'success', text:'Tạo tài khoản thành công!' });
-      setForm({ username:'', password:'', full_name:'', role:'student', email:'' });
-    } catch(err) {
-      setMsg({ type:'error', text: err.response?.data?.message || 'Lỗi tạo tài khoản' });
-    } finally { setLoading(false); }
+      const payload = {
+        username: form.username.trim(),
+        password: form.password,
+        full_name: form.full_name.trim(),
+        role: form.role,
+        email: form.email.trim() || null,
+        is_active: Boolean(form.is_active),
+      };
+
+      if (mode === 'add') {
+        await axios.post(`${API}/admin/users`, payload);
+      } else {
+        await axios.put(`${API}/admin/users/${initial.id}`, payload);
+      }
+      onSave();
+    } catch (e) {
+      setErr(e.response?.data?.message || 'Lỗi lưu tài khoản');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="page-content">
-      <h1 className="page-title">Đăng kí tài khoản</h1>
-      <div className="form-card">
-        {msg && <div className={`form-msg ${msg.type}`}>{msg.text}</div>}
-        <form onSubmit={handleSubmit} className="form-grid">
-          {[
-            { key:'username',  label:'Tên tài khoản *', placeholder:'Nhập username', required:true },
-            { key:'full_name', label:'Họ và tên *',      placeholder:'Nhập họ tên',  required:true },
-          ].map(f => (
-            <div className="form-group" key={f.key}>
-              <label>{f.label}</label>
-              <input value={form[f.key]} placeholder={f.placeholder} required={f.required}
-                onChange={e => setForm({...form, [f.key]: e.target.value})} />
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal account-modal">
+        <div className="modal-header">
+          <h3 className="modal-title">{mode === 'add' ? 'Thêm tài khoản' : 'Sửa tài khoản'}</h3>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          {err && <div className="form-msg error">{err}</div>}
+          <div className="form-grid-2">
+            <div className="form-group">
+              <label>Tên tài khoản *</label>
+              <input value={form.username} placeholder="Nhập username" onChange={e => set('username', e.target.value)} />
             </div>
-          ))}
-          <div className="form-group">
-            <label>Mật khẩu *</label>
-            <input type="password" value={form.password} placeholder="Nhập mật khẩu" required
-              onChange={e => setForm({...form, password: e.target.value})} />
+            <div className="form-group">
+              <label>Họ và tên *</label>
+              <input value={form.full_name} placeholder="Nhập họ tên" onChange={e => set('full_name', e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label>{mode === 'add' ? 'Mật khẩu *' : 'Mật khẩu'}</label>
+              <input
+                type="text"
+                value={form.password}
+                placeholder="Nhập mật khẩu"
+                onChange={e => set('password', e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label>Email</label>
+              <input type="email" value={form.email || ''} placeholder="Nhập email" onChange={e => set('email', e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label>Vai trò</label>
+              <select value={form.role} onChange={e => set('role', e.target.value)}>
+                <option value="student">Học viên</option>
+                <option value="teacher">Giáo viên</option>
+                <option value="admission">Tư vấn tuyển sinh</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Trạng thái</label>
+              <select value={form.is_active ? '1' : '0'} onChange={e => set('is_active', e.target.value === '1')}>
+                <option value="1">Hoạt động</option>
+                <option value="0">Đã khóa</option>
+              </select>
+            </div>
           </div>
-          <div className="form-group">
-            <label>Email</label>
-            <input type="email" value={form.email} placeholder="Nhập email"
-              onChange={e => setForm({...form, email: e.target.value})} />
-          </div>
-          <div className="form-group">
-            <label>Vai trò</label>
-            <select value={form.role} onChange={e => setForm({...form, role: e.target.value})}>
-              <option value="student">Học viên</option>
-              <option value="teacher">Giáo viên</option>
-              <option value="admission">Tư vấn tuyển sinh</option>
-              <option value="admin">Admin</option>
-            </select>
-          </div>
-          <div className="form-group full-width">
-            <button type="submit" className="submit-btn" disabled={loading}>
-              {loading ? 'Đang tạo...' : 'Tạo tài khoản'}
-            </button>
-          </div>
-        </form>
+        </div>
+        <div className="modal-footer">
+          <button className="btn-secondary" onClick={onClose}>Hủy</button>
+          <button className="btn-primary" onClick={handleSave} disabled={loading}>
+            {loading ? 'Đang lưu...' : (mode === 'add' ? 'Thêm tài khoản' : 'Lưu thay đổi')}
+          </button>
+        </div>
       </div>
+    </div>
+  );
+};
+
+const AccountManagementPage = () => {
+  const [accounts, setAccounts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [editItem, setEditItem] = useState(null);
+  const [deleteItem, setDeleteItem] = useState(null);
+  const [delLoading, setDelLoading] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const showToast = (msg, ok = true) => {
+    setToast({ msg, ok });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const fetchAccounts = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await axios.get(`${API}/admin/users`);
+      setAccounts(r.data.users || []);
+    } catch {
+      setAccounts([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchAccounts(); }, [fetchAccounts]);
+
+  const handleSaved = () => {
+    showToast(editItem ? 'Cập nhật tài khoản thành công' : 'Thêm tài khoản thành công');
+    setShowForm(false);
+    setEditItem(null);
+    fetchAccounts();
+  };
+
+  const handleDelete = async () => {
+    setDelLoading(true);
+    try {
+      await axios.delete(`${API}/admin/users/${deleteItem.id}`);
+      showToast('Đã xóa tài khoản');
+      setDeleteItem(null);
+      fetchAccounts();
+    } catch (e) {
+      showToast(e.response?.data?.message || 'Lỗi xóa tài khoản', false);
+    } finally {
+      setDelLoading(false);
+    }
+  };
+
+  const keyword = search.trim().toLowerCase();
+  const filtered = accounts.filter(acc => {
+    if (!keyword) return true;
+    return (
+      acc.full_name?.toLowerCase().includes(keyword) ||
+      acc.username?.toLowerCase().includes(keyword)
+    );
+  });
+
+  return (
+    <div className="page-content">
+      {toast && <div className={`toast ${toast.ok ? 'toast-ok' : 'toast-err'}`}>{toast.msg}</div>}
+
+      <div className="page-header-row">
+        <div>
+          <h1 className="page-title">Quản lý tài khoản</h1>
+          <p className="page-subtitle">{filtered.length} tài khoản</p>
+        </div>
+        <button className="btn-primary btn-add" onClick={() => { setEditItem(null); setShowForm(true); }}>
+          <UserPlusIcon/> Thêm tài khoản
+        </button>
+      </div>
+
+      <div className="search-bar">
+        <span className="search-icon"><SearchIcon/></span>
+        <input
+          placeholder="Tìm tài khoản theo tên hoặc username..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="search-input"
+        />
+      </div>
+
+      {loading ? (
+        <div className="loading-state">Đang tải danh sách tài khoản...</div>
+      ) : (
+        <div className="table-wrapper">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Họ tên</th>
+                <th>Tài khoản</th>
+                <th>Mật khẩu</th>
+                <th>Email</th>
+                <th>Vai trò</th>
+                <th>Trạng thái</th>
+                <th>Ngày tạo</th>
+                <th>Thao tác</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <tr><td colSpan={9} className="empty-row">{search ? 'Không tìm thấy tài khoản' : 'Chưa có tài khoản'}</td></tr>
+              ) : filtered.map((acc, i) => (
+                <tr key={acc.id}>
+                  <td className="td-num">{i + 1}</td>
+                  <td><strong>{acc.full_name}</strong></td>
+                  <td>@{acc.username}</td>
+                  <td className="td-password">{acc.password || <span className="td-empty">Chưa có</span>}</td>
+                  <td>{acc.email || <span className="td-empty">Chưa có</span>}</td>
+                  <td><RoleBadge role={acc.role}/></td>
+                  <td><StatusBadge val={acc.is_active}/></td>
+                  <td>{acc.created_at ? new Date(acc.created_at).toLocaleDateString('vi-VN') : '—'}</td>
+                  <td>
+                    <div className="action-btns">
+                      <button className="action-btn edit" title="Sửa" onClick={() => { setEditItem(acc); setShowForm(true); }}>
+                        <EditIcon/>
+                      </button>
+                      <button className="action-btn delete" title="Xóa" onClick={() => setDeleteItem(acc)}>
+                        <TrashIcon/>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {showForm && (
+        <AccountFormModal
+          mode={editItem ? 'edit' : 'add'}
+          initial={editItem}
+          onClose={() => { setShowForm(false); setEditItem(null); }}
+          onSave={handleSaved}
+        />
+      )}
+
+      {deleteItem && (
+        <ConfirmModal
+          item={deleteItem}
+          title="Xác nhận xóa tài khoản"
+          message={<>Bạn có chắc muốn xóa vĩnh viễn tài khoản <strong>"{deleteItem.full_name}"</strong>?</>}
+          confirmText="Xóa tài khoản"
+          loading={delLoading}
+          onConfirm={handleDelete}
+          onCancel={() => setDeleteItem(null)}
+        />
+      )}
     </div>
   );
 };
@@ -915,12 +1208,21 @@ export default function AdminDashboard() {
   const handleLogout = () => { logout(); navigate('/login'); };
 
   const peopleCols = [
-    { key:'id',         label:'#' },
+    { key:'stt',        label:'STT', render: (_v, _row, i) => i + 1 },
     { key:'full_name',  label:'Họ tên' },
     { key:'username',   label:'Tài khoản' },
     { key:'email',      label:'Email' },
     { key:'is_active',  label:'Trạng thái', render: v => <StatusBadge val={v}/> },
     { key:'created_at', label:'Ngày tạo', render: v => v ? new Date(v).toLocaleDateString('vi-VN') : '—' },
+  ];
+  const studentCols = [
+    { key:'stt',         label:'STT', render: (_v, _row, i) => i + 1 },
+    { key:'full_name',   label:'Họ tên' },
+    { key:'username',    label:'Tài khoản' },
+    { key:'email',       label:'Email' },
+    { key:'class_names', label:'Mã lớp', render: v => v || <span className="td-empty">Chưa có lớp</span> },
+    { key:'is_active',   label:'Trạng thái', render: v => <StatusBadge val={v}/> },
+    { key:'created_at',  label:'Ngày tạo', render: v => v ? new Date(v).toLocaleDateString('vi-VN') : '—' },
   ];
 
   return (
@@ -930,11 +1232,12 @@ export default function AdminDashboard() {
         <Routes>
           <Route path="/"              element={<AdminHome user={user} stats={stats}/>}/>
           <Route path="/notifications" element={<AdminNotifications onRead={fetchUnread}/>}/>
-          <Route path="/register"      element={<RegisterPage/>}/>
+          <Route path="/accounts"      element={<AccountManagementPage/>}/>
+          <Route path="/register"      element={<AccountManagementPage/>}/>
           <Route path="/classes/vip"   element={<ClassesPage type="vip"/>}/>
           <Route path="/classes/trial" element={<ClassesPage type="trial"/>}/>
           <Route path="/teachers"      element={<TablePage title="Quản lí giáo viên"  fetchUrl={`${API}/admin/teachers`} columns={peopleCols}/>}/>
-          <Route path="/students"      element={<TablePage title="Quản lí học viên"   fetchUrl={`${API}/admin/students`} columns={peopleCols}/>}/>
+          <Route path="/students"      element={<TablePage title="Quản lí học viên"   fetchUrl={`${API}/admin/students`} columns={studentCols}/>}/>
         </Routes>
       </main>
     </div>

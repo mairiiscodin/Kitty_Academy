@@ -300,200 +300,93 @@ router.get('/teachers/online', teacherOnly, async (req, res) => {
 // ===================== HỦY LỚP / NHỜ GV KHÁC =====================
 
 // Tạo yêu cầu nhờ GV khác dạy thay
-router.post('/cancel-request', teacherOnly, async (req, res) => {
-  const { schedule_id, substitute_teacher_id, reason } = req.body;
-  if (!schedule_id || !substitute_teacher_id) {
-    return res.status(400).json({ success: false, message: 'Thiếu thông tin' });
+router.post('/leave-request', teacherOnly, async (req, res) => {
+  const { schedule_id, leave_date, reason } = req.body;
+  if (!schedule_id || !reason?.trim()) {
+    return res.status(400).json({ success: false, message: 'Vui long nhap ly do nghi' });
   }
 
+  const conn = await db.getConnection();
   try {
-    // Kiểm tra schedule thuộc về GV này
-    const [schedRows] = await db.query(
+    await conn.beginTransaction();
+
+    const [schedRows] = await conn.query(
       `SELECT s.*, c.name as class_name, c.type as class_type
-       FROM schedules s JOIN classes c ON c.id = s.class_id
-       WHERE s.id = ? AND s.teacher_id = ?`,
+       FROM schedules s
+       JOIN classes c ON c.id = s.class_id
+       WHERE s.id = ? AND s.teacher_id = ? AND s.is_active = TRUE AND c.is_active = TRUE`,
       [schedule_id, req.user.id]
     );
-    if (schedRows.length === 0) {
-      return res.status(403).json({ success: false, message: 'Không tìm thấy lịch dạy' });
-    }
 
-    // Kiểm tra đã có yêu cầu pending chưa
-    const [existing] = await db.query(
-      "SELECT id FROM cancel_requests WHERE schedule_id = ? AND status = 'pending'",
-      [schedule_id]
-    );
-    if (existing.length > 0) {
-      return res.status(400).json({ success: false, message: 'Đã có yêu cầu đang chờ xử lý cho lịch này' });
+    if (schedRows.length === 0) {
+      await conn.rollback();
+      return res.status(403).json({ success: false, message: 'Khong tim thay lich day' });
     }
 
     const sched = schedRows[0];
-
-    // Tạo cancel_request
-    const [result] = await db.query(
-      'INSERT INTO cancel_requests (schedule_id, requesting_teacher_id, substitute_teacher_id, reason) VALUES (?, ?, ?, ?)',
-      [schedule_id, req.user.id, substitute_teacher_id, reason || null]
-    );
-
-    const days = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+    const days = ['Chu nhat', 'Thu 2', 'Thu 3', 'Thu 4', 'Thu 5', 'Thu 6', 'Thu 7'];
     const dayStr = days[sched.day_of_week];
     const timeStr = `${sched.start_time.substring(0,5)}-${sched.end_time.substring(0,5)}`;
+    const dateStr = leave_date || 'chua chon ngay';
+    const cleanReason = reason.trim();
 
-    // Gửi thông báo cho GV được nhờ
-    await db.query(
-      `INSERT INTO notifications (user_id, sender_id, type, title, message, cancel_request_id)
-       VALUES (?, ?, 'cancel_request', ?, ?, ?)`,
-      [
-        substitute_teacher_id,
-        req.user.id,
-        `Yêu cầu dạy thay lớp ${sched.class_name}`,
-        `${req.user.full_name} nhờ bạn dạy thay lớp "${sched.class_name}" (${dayStr} ${timeStr}). Lý do: ${reason || 'Không có lý do'}`,
-        result.insertId
-      ]
-    );
-
-    // Gửi thông báo cho admin biết GV A đã nhờ GV B dạy thay
-    const [subTeacherRows] = await db.query(
-      'SELECT full_name FROM users WHERE id = ?',
-      [substitute_teacher_id]
-    );
-    const substituteTeacherName = subTeacherRows[0]?.full_name || 'Không xác định';
-
-    const [admins] = await db.query(
+    const [admins] = await conn.query(
       'SELECT id FROM users WHERE role = ? AND is_active = TRUE',
       ['admin']
     );
-    for (const admin of admins) {
-      await db.query(
-        `INSERT INTO notifications (user_id, sender_id, type, title, message, cancel_request_id)
-         VALUES (?, ?, 'cancel_request', ?, ?, ?)`,
-        [
-          admin.id,
-          req.user.id,
-          `📋 Yêu cầu dạy thay mới`,
-          `${req.user.full_name} đã nhờ ${substituteTeacherName} dạy thay lớp "${sched.class_name}" (${dayStr} ${timeStr}). Lý do: ${reason || 'Không có lý do'}`,
-          result.insertId
-        ]
-      );
-    }
-
-    res.json({ success: true, message: 'Đã gửi yêu cầu thành công', request_id: result.insertId });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: 'Lỗi server' });
-  }
-});
-
-// Xác nhận / từ chối yêu cầu dạy thay
-router.post('/cancel-request/:id/respond', teacherOnly, async (req, res) => {
-  const { action } = req.body; // 'accept' | 'reject'
-  const requestId = req.params.id;
-
-  if (!['accept', 'reject'].includes(action)) {
-    return res.status(400).json({ success: false, message: 'Action không hợp lệ' });
-  }
-
-  try {
-    const [rows] = await db.query(
-      `SELECT cr.*, s.class_id, s.teacher_id as original_teacher_id,
-              c.name as class_name, s.day_of_week, s.start_time, s.end_time
-       FROM cancel_requests cr
-       JOIN schedules s ON s.id = cr.schedule_id
-       JOIN classes c ON c.id = s.class_id
-       WHERE cr.id = ? AND cr.substitute_teacher_id = ? AND cr.status = 'pending'`,
-      [requestId, req.user.id]
+    const [students] = await conn.query(
+      `SELECT u.id
+       FROM students st
+       JOIN users u ON u.id = st.user_id
+       WHERE st.class_id = ? AND u.is_active = TRUE`,
+      [sched.class_id]
     );
 
-    if (rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Yêu cầu không tồn tại hoặc không hợp lệ' });
+    const notifications = [];
+    admins.forEach(admin => {
+      notifications.push([
+        admin.id,
+        req.user.id,
+        'system',
+        'Giao vien xin nghi',
+        `${req.user.full_name} xin nghi lop "${sched.class_name}" ngay ${dateStr} (${dayStr} ${timeStr}). Ly do: ${cleanReason}`,
+      ]);
+    });
+    students.forEach(student => {
+      notifications.push([
+        student.id,
+        req.user.id,
+        'system',
+        `Thong bao nghi lop ${sched.class_name}`,
+        `Giao vien ${req.user.full_name} xin nghi lop "${sched.class_name}" ngay ${dateStr} (${dayStr} ${timeStr}). Ly do: ${cleanReason}`,
+      ]);
+    });
+
+    if (notifications.length > 0) {
+      await conn.query(
+        'INSERT INTO notifications (user_id, sender_id, type, title, message) VALUES ?',
+        [notifications]
+      );
     }
 
-    const req_data = rows[0];
-    const days = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
-    const dayStr = days[req_data.day_of_week];
-    const timeStr = `${req_data.start_time.substring(0,5)}-${req_data.end_time.substring(0,5)}`;
-
-    if (action === 'accept') {
-      // Cập nhật teacher_id trong schedules → chuyển nhượng lịch
-      await db.query(
-        'UPDATE schedules SET teacher_id = ? WHERE id = ?',
-        [req.user.id, req_data.schedule_id]
-      );
-      // Cập nhật teacher_id trong classes nếu cần
-      await db.query(
-        'UPDATE classes SET teacher_id = ? WHERE id = ? AND teacher_id = ?',
-        [req.user.id, req_data.class_id, req_data.original_teacher_id]
-      );
-      // Cập nhật trạng thái yêu cầu
-      await db.query(
-        "UPDATE cancel_requests SET status = 'accepted', responded_at = NOW() WHERE id = ?",
-        [requestId]
-      );
-      // Thông báo cho GV xin hủy
-      await db.query(
-        `INSERT INTO notifications (user_id, sender_id, type, title, message, cancel_request_id)
-         VALUES (?, ?, 'request_accepted', ?, ?, ?)`,
-        [
-          req_data.requesting_teacher_id,
-          req.user.id,
-          `✅ Yêu cầu được chấp nhận`,
-          `${req.user.full_name} đã đồng ý dạy thay lớp "${req_data.class_name}" (${dayStr} ${timeStr}). Lịch dạy đã được chuyển nhượng.`,
-          requestId
-        ]
-      );
-
-      // Thông báo cho admin
-      const [requestingTeacher] = await db.query(
-        'SELECT full_name FROM users WHERE id = ?',
-        [req_data.requesting_teacher_id]
-      );
-      const requestingTeacherName = requestingTeacher[0]?.full_name || 'Không xác định';
-      
-      const [admins] = await db.query(
-        'SELECT id FROM users WHERE role = ? AND is_active = TRUE',
-        ['admin']
-      );
-      
-      for (const admin of admins) {
-        await db.query(
-          `INSERT INTO notifications (user_id, sender_id, type, title, message, cancel_request_id)
-           VALUES (?, ?, 'request_accepted', ?, ?, ?)`,
-          [
-            admin.id,
-            req.user.id,
-            `📋 Giáo viên dạy thay được chấp nhận`,
-            `${requestingTeacherName} đã gửi yêu cầu dạy thay lớp "${req_data.class_name}" (${dayStr} ${timeStr}) cho ${req.user.full_name}. Yêu cầu đã được chấp nhận và lịch dạy đã được cập nhật.`,
-            requestId
-          ]
-        );
-      }
-
-      res.json({ success: true, message: 'Đã chấp nhận dạy thay. Lịch đã được chuyển nhượng!' });
-
-    } else {
-      await db.query(
-        "UPDATE cancel_requests SET status = 'rejected', responded_at = NOW() WHERE id = ?",
-        [requestId]
-      );
-      await db.query(
-        `INSERT INTO notifications (user_id, sender_id, type, title, message, cancel_request_id)
-         VALUES (?, ?, 'request_rejected', ?, ?, ?)`,
-        [
-          req_data.requesting_teacher_id,
-          req.user.id,
-          `❌ Yêu cầu bị từ chối`,
-          `${req.user.full_name} không thể dạy thay lớp "${req_data.class_name}" (${dayStr} ${timeStr}).`,
-          requestId
-        ]
-      );
-      res.json({ success: true, message: 'Đã từ chối yêu cầu' });
-    }
+    await conn.commit();
+    res.json({ success: true, message: 'Da gui thong bao xin nghi', notified: notifications.length });
   } catch (err) {
+    await conn.rollback();
     console.error(err);
-    res.status(500).json({ success: false, message: 'Lỗi server' });
+    res.status(500).json({ success: false, message: 'Loi server' });
+  } finally {
+    conn.release();
   }
 });
 
+router.post('/cancel-request', teacherOnly, async (req, res) => {
+  return res.status(410).json({ success: false, message: 'Chuc nang day thay da duoc thay bang xin nghi' });
+});
+
+router.post('/cancel-request/:id/respond', teacherOnly, async (req, res) => {
+  return res.status(410).json({ success: false, message: 'Chuc nang day thay da bi tat' });
+});
 // ===================== THÔNG BÁO =====================
 
 router.get('/notifications', async (req, res) => {

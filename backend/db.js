@@ -1,5 +1,26 @@
 const mysql2 = require('mysql2/promise');
+const fs = require('fs');
 require('dotenv').config();
+
+const getSslConfig = () => {
+  if (process.env.DB_SSL !== 'true') return undefined;
+
+  if (process.env.DB_SSL_CA) {
+    return {
+      ca: process.env.DB_SSL_CA.replace(/\\n/g, '\n'),
+      rejectUnauthorized: true,
+    };
+  }
+
+  if (process.env.DB_SSL_CA_PATH) {
+    return {
+      ca: fs.readFileSync(process.env.DB_SSL_CA_PATH, 'utf8'),
+      rejectUnauthorized: true,
+    };
+  }
+
+  return { rejectUnauthorized: false };
+};
 
 const pool = mysql2.createPool({
   host: process.env.DB_HOST || 'localhost',
@@ -7,7 +28,7 @@ const pool = mysql2.createPool({
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'kitty_academy',
-  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: true } : undefined,
+  ssl: getSslConfig(),
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,

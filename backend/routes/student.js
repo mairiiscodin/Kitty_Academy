@@ -89,11 +89,34 @@ router.get('/dashboard', studentOnly, async (req, res) => {
     // Thống kê điểm danh
     const [[attendance]] = await db.query(
       `SELECT
-         COUNT(*) as total_sessions,
-         SUM(attendance = 'present') as present_count,
-         SUM(attendance = 'absent') as absent_count,
-         SUM(attendance = 'late') as late_count
-       FROM session_comments WHERE student_id = ?`,
+         COALESCE(SUM(class_totals.total_sessions), 0) as total_sessions,
+         COALESCE(SUM(class_totals.present_count), 0) as present_count,
+         COALESCE(SUM(class_totals.absent_count), 0) as absent_count,
+         COALESCE(SUM(class_totals.late_count), 0) as late_count
+       FROM (
+         SELECT
+           c.id,
+           COALESCE(c.total_sessions, 0) as total_sessions,
+           COUNT(DISTINCT CASE
+             WHEN sc.attendance = 'present'
+             THEN sc.session_date
+           END) as present_count,
+           COUNT(DISTINCT CASE
+             WHEN sc.attendance = 'absent'
+             THEN sc.session_date
+           END) as absent_count,
+           COUNT(DISTINCT CASE
+             WHEN sc.attendance = 'late'
+             THEN sc.session_date
+           END) as late_count
+         FROM students st
+         JOIN classes c ON c.id = st.class_id AND c.is_active = TRUE
+         LEFT JOIN session_comments sc
+           ON sc.class_id = c.id
+          AND sc.student_id = st.user_id
+         WHERE st.user_id = ?
+       GROUP BY c.id, c.total_sessions
+       ) class_totals`,
       [studentId]
     );
 

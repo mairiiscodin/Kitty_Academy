@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const db = require('./db');
 require('dotenv').config();
 
 const app = express();
@@ -23,6 +24,15 @@ app.use('/api/student', require('./routes/student'));
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ success: true, message: 'Kitty Academy API is running 🚀', time: new Date().toISOString() });
+});
+
+app.get('/api/health-db', async (req, res) => {
+  try {
+    await db.query('SELECT 1');
+    res.json({ success: true, db: 'connected', time: new Date().toISOString() });
+  } catch (err) {
+    res.status(500).json({ success: false, db: 'error', message: err.message });
+  }
 });
 
 // 404 handler

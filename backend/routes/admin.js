@@ -61,6 +61,52 @@ const validateScheduleInput = (res, { teacherId, dayOfWeek, startTime, endTime }
   return true;
 };
 
+const normalizeClassSchedules = (body) => {
+  const rawSchedules = Array.isArray(body.schedules)
+    ? body.schedules
+    : (
+      body.day_of_week != null && body.start_time && body.end_time
+        ? [{ day_of_week: body.day_of_week, start_time: body.start_time, end_time: body.end_time }]
+        : []
+    );
+
+  return rawSchedules
+    .map(s => ({
+      day_of_week: s.day_of_week,
+      start_time: s.start_time,
+      end_time: s.end_time,
+    }))
+    .filter(s => s.day_of_week != null && s.start_time && s.end_time);
+};
+
+const validateClassSchedules = (res, schedules) => {
+  for (const schedule of schedules) {
+    if (!validateScheduleInput(res, {
+      teacherId: true,
+      dayOfWeek: schedule.day_of_week,
+      startTime: schedule.start_time,
+      endTime: schedule.end_time,
+    })) return false;
+  }
+
+  for (let i = 0; i < schedules.length; i++) {
+    for (let j = i + 1; j < schedules.length; j++) {
+      const a = schedules[i];
+      const b = schedules[j];
+      if (
+        String(a.day_of_week) === String(b.day_of_week) &&
+        a.start_time < b.end_time &&
+        a.end_time > b.start_time
+      ) {
+        res.status(400).json({ success: false, message: 'Cac buoi hoc trong cung lop bi trung gio' });
+        return false;
+      }
+    }
+  }
+
+  return true;
+};
+
 router.use(authMiddleware, adminOnly);
 
 // ===================== DASHBOARD =====================
@@ -126,7 +172,7 @@ router.put('/notifications/:id/read', async (req, res) => {
 // ===================== USERS =====================
 router.get('/users', async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT id, username, full_name, role, email, is_active, created_at FROM users ORDER BY created_at DESC');
+    const [rows] = await db.query('SELECT id, username, password, full_name, role, email, is_active, created_at FROM users ORDER BY created_at DESC');
     res.json({ success: true, users: rows });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Lá»—i server' });
@@ -151,14 +197,16 @@ router.post('/users', async (req, res) => {
 });
 
 router.put('/users/:id', async (req, res) => {
-  const { full_name, role, email, is_active, password } = req.body;
+  const { username, full_name, role, email, is_active, password } = req.body;
+  if (!username || !full_name)
+    return res.status(400).json({ success: false, message: 'Thieu thong tin bat buoc' });
   try {
     if (password) {
-      await db.query('UPDATE users SET full_name=?, role=?, email=?, is_active=?, password=? WHERE id=?',
-        [full_name, role, email, is_active, password, req.params.id]);
+      await db.query('UPDATE users SET username=?, full_name=?, role=?, email=?, is_active=?, password=? WHERE id=?',
+        [username, full_name, role, email || null, is_active, password, req.params.id]);
     } else {
-      await db.query('UPDATE users SET full_name=?, role=?, email=?, is_active=? WHERE id=?',
-        [full_name, role, email, is_active, req.params.id]);
+      await db.query('UPDATE users SET username=?, full_name=?, role=?, email=?, is_active=? WHERE id=?',
+        [username, full_name, role, email || null, is_active, req.params.id]);
     }
     res.json({ success: true, message: 'Cáº­p nháº­t thÃ nh cÃ´ng' });
   } catch (err) {
@@ -168,8 +216,8 @@ router.put('/users/:id', async (req, res) => {
 
 router.delete('/users/:id', async (req, res) => {
   try {
-    await db.query('UPDATE users SET is_active=FALSE WHERE id=?', [req.params.id]);
-    res.json({ success: true, message: 'ÄÃ£ vÃ´ hiá»‡u hÃ³a tÃ i khoáº£n' });
+    await db.query('DELETE FROM users WHERE id=?', [req.params.id]);
+    res.json({ success: true, message: 'Da xoa tai khoan' });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Lá»—i server' });
   }
@@ -180,15 +228,41 @@ router.get('/classes', async (req, res) => {
   try {
     const [rows] = await db.query(`
       SELECT c.*, u.full_name as teacher_name,
-        s.day_of_week, s.start_time, s.end_time, s.id as schedule_id,
         (SELECT COUNT(*) FROM students st WHERE st.class_id = c.id) as student_count,
         (SELECT COUNT(DISTINCT session_date) FROM session_comments WHERE class_id = c.id) as session_count
       FROM classes c
       LEFT JOIN users u ON c.teacher_id = u.id
-      LEFT JOIN schedules s ON s.class_id = c.id AND s.teacher_id = c.teacher_id
       WHERE c.is_active = TRUE
       ORDER BY c.created_at DESC
     `);
+    const classIds = rows.map(row => row.id);
+    let schedulesByClass = {};
+
+    if (classIds.length > 0) {
+      const [scheduleRows] = await db.query(
+        `SELECT id, class_id, day_of_week, start_time, end_time
+         FROM schedules
+         WHERE is_active = TRUE AND class_id IN (?)
+         ORDER BY day_of_week, start_time`,
+        [classIds]
+      );
+
+      schedulesByClass = scheduleRows.reduce((acc, schedule) => {
+        if (!acc[schedule.class_id]) acc[schedule.class_id] = [];
+        acc[schedule.class_id].push(schedule);
+        return acc;
+      }, {});
+    }
+
+    rows.forEach(row => {
+      row.schedules = schedulesByClass[row.id] || [];
+      const firstSchedule = row.schedules[0];
+      row.schedule_id = firstSchedule?.id || null;
+      row.day_of_week = firstSchedule?.day_of_week ?? null;
+      row.start_time = firstSchedule?.start_time || null;
+      row.end_time = firstSchedule?.end_time || null;
+    });
+
     res.json({ success: true, classes: rows });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Lá»—i server' });
@@ -220,11 +294,14 @@ router.get('/classes/:id/available-students', async (req, res) => {
       SELECT u.id, u.username, u.full_name, u.email
       FROM users u
       WHERE u.role = 'student' AND u.is_active = TRUE
-        AND u.id NOT IN (
-          SELECT st.user_id FROM students st WHERE st.class_id = ?
+        AND NOT EXISTS (
+          SELECT 1
+          FROM students st
+          JOIN classes c ON c.id = st.class_id AND c.is_active = TRUE
+          WHERE st.user_id = u.id
         )
       ORDER BY u.full_name
-    `, [req.params.id]);
+    `);
     res.json({ success: true, students: rows });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Lá»—i server' });
@@ -238,6 +315,12 @@ router.get('/students/all', async (req, res) => {
       SELECT u.id, u.username, u.full_name, u.email
       FROM users u
       WHERE u.role = 'student' AND u.is_active = TRUE
+        AND NOT EXISTS (
+          SELECT 1
+          FROM students st
+          JOIN classes c ON c.id = st.class_id AND c.is_active = TRUE
+          WHERE st.user_id = u.id
+        )
       ORDER BY u.full_name
     `);
     res.json({ success: true, students: rows });
@@ -247,20 +330,27 @@ router.get('/students/all', async (req, res) => {
 });
 
 router.post('/classes', async (req, res) => {
-  const { name, type, description, trial_student_name, class_link, max_students, total_sessions, teacher_id, day_of_week, start_time, end_time, student_ids } = req.body;
+  const { name, type, description, trial_student_name, class_link, max_students, total_sessions, teacher_id, student_ids } = req.body;
+  const schedules = normalizeClassSchedules(req.body);
   if (!name || !type)
     return res.status(400).json({ success: false, message: 'Thiáº¿u thÃ´ng tin báº¯t buá»™c' });
   if (type === 'trial' && !trial_student_name?.trim())
     return res.status(400).json({ success: false, message: 'Vui long nhap ten hoc sinh hoc thu' });
-  if (!validateScheduleInput(res, { teacherId: teacher_id, dayOfWeek: day_of_week, startTime: start_time, endTime: end_time })) return;
+  if (!validateClassSchedules(res, schedules)) return;
 
   const conn = await db.getConnection();
   try {
     await conn.beginTransaction();
 
     // 2.5. Kiểm tra xung đột lịch biểu nếu có teacher_id và schedule
-    if (teacher_id && day_of_week != null && start_time && end_time) {
-      const hasConflict = await hasTeacherScheduleConflict(conn, { teacherId: teacher_id, dayOfWeek: day_of_week, startTime: start_time, endTime: end_time });
+    for (const schedule of schedules) {
+      if (!teacher_id) break;
+      const hasConflict = await hasTeacherScheduleConflict(conn, {
+        teacherId: teacher_id,
+        dayOfWeek: schedule.day_of_week,
+        startTime: schedule.start_time,
+        endTime: schedule.end_time,
+      });
       if (hasConflict) {
         await conn.rollback();
         return res.status(400).json({ success: false, message: 'Giao vien da co lop khac vao thoi gian nay' });
@@ -284,10 +374,17 @@ router.post('/classes', async (req, res) => {
     const classId = result.insertId;
 
     // 2. Táº¡o lá»‹ch náº¿u cÃ³
-    if (teacher_id && day_of_week != null && start_time && end_time) {
+    if (teacher_id && schedules.length > 0) {
+      const scheduleValues = schedules.map(schedule => [
+        classId,
+        teacher_id,
+        schedule.day_of_week,
+        schedule.start_time,
+        schedule.end_time,
+      ]);
       await conn.query(
-        'INSERT INTO schedules (class_id, teacher_id, day_of_week, start_time, end_time) VALUES (?, ?, ?, ?, ?)',
-        [classId, teacher_id, day_of_week, start_time, end_time]
+        'INSERT INTO schedules (class_id, teacher_id, day_of_week, start_time, end_time) VALUES ?',
+        [scheduleValues]
       );
     }
 
@@ -296,6 +393,25 @@ router.post('/classes', async (req, res) => {
       const maxSt = max_students || 30;
       if (student_ids.length > maxSt)
         throw new Error(`VÆ°á»£t quÃ¡ sÄ© sá»‘ tá»‘i Ä‘a (${maxSt} há»c sinh)`);
+
+      const [assigned] = await conn.query(
+        `SELECT st.user_id
+         FROM students st
+         JOIN classes c ON c.id = st.class_id AND c.is_active = TRUE
+         WHERE st.user_id IN (?)`,
+        [student_ids]
+      );
+      if (assigned.length > 0) {
+        throw new Error('Mot hoac nhieu hoc sinh da co lop');
+      }
+
+      await conn.query(
+        `DELETE st
+         FROM students st
+         JOIN classes c ON c.id = st.class_id AND c.is_active = FALSE
+         WHERE st.user_id IN (?)`,
+        [student_ids]
+      );
 
       const vals = student_ids.map(sid => [sid, classId, new Date().toISOString().slice(0,10)]);
       await conn.query('INSERT IGNORE INTO students (user_id, class_id, enrollment_date) VALUES ?', [vals]);
@@ -324,28 +440,27 @@ router.post('/classes', async (req, res) => {
 });
 
 router.put('/classes/:id', async (req, res) => {
-  const { name, type, description, trial_student_name, class_link, max_students, total_sessions, teacher_id, day_of_week, start_time, end_time } = req.body;
+  const { name, type, description, trial_student_name, class_link, max_students, total_sessions, teacher_id } = req.body;
+  const schedules = normalizeClassSchedules(req.body);
   const classId = req.params.id;
   const teacherId = teacher_id || null;
-  const conn = await db.getConnection();
   if (type === 'trial' && !trial_student_name?.trim())
     return res.status(400).json({ success: false, message: 'Vui long nhap ten hoc sinh hoc thu' });
+  if (!validateClassSchedules(res, schedules)) return;
+  const conn = await db.getConnection();
 
   try {
     await conn.beginTransaction();
 
     // Kiểm tra xung đột lịch biểu nếu có teacher_id mới và schedule
-    if (teacherId && day_of_week != null && start_time && end_time) {
-      const [oldSchedules] = await conn.query('SELECT id FROM schedules WHERE class_id=? AND is_active=TRUE LIMIT 1', [classId]);
-      const oldScheduleId = oldSchedules.length > 0 ? oldSchedules[0].id : null;
-      
+    for (const schedule of schedules) {
+      if (!teacherId) break;
       const hasConflict = await hasTeacherScheduleConflict(conn, {
         teacherId: teacherId,
-        dayOfWeek: day_of_week,
-        startTime: start_time,
-        endTime: end_time,
+        dayOfWeek: schedule.day_of_week,
+        startTime: schedule.start_time,
+        endTime: schedule.end_time,
         excludeClassId: classId,
-        excludeScheduleId: oldScheduleId
       });
       
       if (hasConflict) {
@@ -369,27 +484,22 @@ router.put('/classes/:id', async (req, res) => {
       ]
     );
 
-    if (teacherId) {
-      const [activeSchedules] = await conn.query(
-        'SELECT id FROM schedules WHERE class_id=? AND is_active=TRUE',
-        [classId]
-      );
+    await conn.query(
+      'UPDATE schedules SET is_active=FALSE WHERE class_id=? AND is_active=TRUE',
+      [classId]
+    );
 
-      if (activeSchedules.length > 0) {
-        await conn.query(
-          'UPDATE schedules SET teacher_id=?, day_of_week=?, start_time=?, end_time=? WHERE class_id=? AND is_active=TRUE',
-          [teacherId, day_of_week, start_time, end_time, classId]
-        );
-      } else if (day_of_week != null && start_time && end_time) {
-        await conn.query(
-          'INSERT INTO schedules (class_id, teacher_id, day_of_week, start_time, end_time) VALUES (?, ?, ?, ?, ?)',
-          [classId, teacherId, day_of_week, start_time, end_time]
-        );
-      }
-    } else {
+    if (teacherId && schedules.length > 0) {
+      const scheduleValues = schedules.map(schedule => [
+        classId,
+        teacherId,
+        schedule.day_of_week,
+        schedule.start_time,
+        schedule.end_time,
+      ]);
       await conn.query(
-        'UPDATE schedules SET is_active=FALSE WHERE class_id=? AND is_active=TRUE',
-        [classId]
+        'INSERT INTO schedules (class_id, teacher_id, day_of_week, start_time, end_time) VALUES ?',
+        [scheduleValues]
       );
     }
 
@@ -423,6 +533,23 @@ router.post('/classes/:id/enroll', async (req, res) => {
     if (cur + student_ids.length > cls.max_students)
       return res.status(400).json({ success: false, message: `VÆ°á»£t quÃ¡ sÄ© sá»‘ tá»‘i Ä‘a (${cls.max_students}). Hiá»‡n cÃ³ ${cur} há»c sinh.` });
 
+    const [assigned] = await db.query(
+      `SELECT st.user_id
+       FROM students st
+       JOIN classes c ON c.id = st.class_id AND c.is_active = TRUE
+       WHERE st.user_id IN (?)`,
+      [student_ids]
+    );
+    if (assigned.length > 0) {
+      return res.status(400).json({ success: false, message: 'Mot hoac nhieu hoc sinh da co lop' });
+    }
+    await db.query(
+      `DELETE st
+       FROM students st
+       JOIN classes c ON c.id = st.class_id AND c.is_active = FALSE
+       WHERE st.user_id IN (?)`,
+      [student_ids]
+    );
     const vals = student_ids.map(sid => [sid, classId, new Date().toISOString().slice(0,10)]);
     await db.query('INSERT IGNORE INTO students (user_id, class_id, enrollment_date) VALUES ?', [vals]);
     res.json({ success: true, message: `ÄÃ£ thÃªm ${student_ids.length} há»c sinh vÃ o lá»›p` });
@@ -471,7 +598,14 @@ router.get('/teachers', async (req, res) => {
 router.get('/students', async (req, res) => {
   try {
     const [rows] = await db.query(
-      "SELECT id, username, full_name, email, is_active, created_at FROM users WHERE role='student' ORDER BY created_at DESC"
+      `SELECT u.id, u.username, u.full_name, u.email, u.is_active, u.created_at,
+              GROUP_CONCAT(c.name ORDER BY c.name SEPARATOR ', ') as class_names
+       FROM users u
+       LEFT JOIN students st ON st.user_id = u.id
+       LEFT JOIN classes c ON c.id = st.class_id AND c.is_active = TRUE
+       WHERE u.role='student'
+       GROUP BY u.id, u.username, u.full_name, u.email, u.is_active, u.created_at
+       ORDER BY u.created_at DESC`
     );
     res.json({ success: true, students: rows });
   } catch (err) {

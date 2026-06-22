@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import './Teacher.css';
 
@@ -17,6 +17,36 @@ function todayISO() {
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
   return d.toISOString().slice(0, 10);
 }
+function scheduleLabel(schedule) {
+  return `${DAYS_VI[schedule.day_of_week]} ${fmtTime(schedule.start_time)} - ${fmtTime(schedule.end_time)}`;
+}
+function getClassSchedules(cls) {
+  return cls.schedules?.length
+    ? cls.schedules
+    : [{ schedule_id: cls.schedule_id, day_of_week: cls.day_of_week, start_time: cls.start_time, end_time: cls.end_time }];
+}
+function groupClassesById(rows) {
+  const byId = new Map();
+  rows.forEach(row => {
+    const schedule = {
+      schedule_id: row.schedule_id,
+      day_of_week: row.day_of_week,
+      start_time: row.start_time,
+      end_time: row.end_time,
+    };
+    if (!byId.has(row.id)) {
+      byId.set(row.id, { ...row, schedules: [] });
+    }
+    const grouped = byId.get(row.id);
+    if (schedule.schedule_id && !grouped.schedules.some(s => s.schedule_id === schedule.schedule_id)) {
+      grouped.schedules.push(schedule);
+    }
+  });
+  return Array.from(byId.values()).map(row => ({
+    ...row,
+    schedules: row.schedules.sort((a, b) => Number(a.day_of_week) - Number(b.day_of_week) || String(a.start_time).localeCompare(String(b.start_time))),
+  }));
+}
 
 const ATTENDANCE_OPTIONS = [
   { value: 'present', label: 'Có mặt' },
@@ -25,34 +55,29 @@ const ATTENDANCE_OPTIONS = [
 ];
 
 // ---- Modal nhờ GV khác ----
-function SubstituteModal({ cls, onClose, onSuccess }) {
-  const [teachers, setTeachers] = useState([]);
-  const [selectedId, setSelectedId] = useState('');
+function LeaveRequestModal({ cls, onClose, onSuccess }) {
+  const schedules = getClassSchedules(cls);
+  const [selectedScheduleId, setSelectedScheduleId] = useState(String(schedules[0]?.schedule_id || ''));
+  const [leaveDate, setLeaveDate] = useState(todayISO());
   const [reason, setReason] = useState('');
   const [loading, setLoading] = useState(false);
-  const [loadingTeachers, setLoadingTeachers] = useState(true);
   const [msg, setMsg] = useState(null);
 
-  useEffect(() => {
-    axios.get(`${API}/teacher/teachers/online`)
-      .then(r => setTeachers(r.data.teachers?.filter(t => t.is_online) || []))
-      .catch(() => setTeachers([]))
-      .finally(() => setLoadingTeachers(false));
-  }, []);
-
   const handleSend = async () => {
-    if (!selectedId) return setMsg({ type: 'error', text: 'Vui lòng chọn giáo viên' });
+    if (!selectedScheduleId) return setMsg({ type: 'error', text: 'Vui lòng chọn buổi học' });
+    if (!leaveDate) return setMsg({ type: 'error', text: 'Vui lòng chọn ngày nghỉ' });
+    if (!reason.trim()) return setMsg({ type: 'error', text: 'Vui lòng nhập lý do nghỉ' });
     setLoading(true); setMsg(null);
     try {
-      await axios.post(`${API}/teacher/cancel-request`, {
-        schedule_id: cls.schedule_id,
-        substitute_teacher_id: Number(selectedId),
+      await axios.post(`${API}/teacher/leave-request`, {
+        schedule_id: Number(selectedScheduleId),
+        leave_date: leaveDate,
         reason,
       });
-      setMsg({ type: 'success', text: 'Đã gửi yêu cầu thành công! GV sẽ nhận được thông báo.' });
+      setMsg({ type: 'success', text: 'Đã gửi thông báo xin nghỉ cho admin và học sinh của lớp.' });
       setTimeout(() => { onSuccess(); onClose(); }, 1500);
     } catch (err) {
-      setMsg({ type: 'error', text: err.response?.data?.message || 'Lỗi gửi yêu cầu' });
+      setMsg({ type: 'error', text: err.response?.data?.message || 'Lỗi gửi xin nghỉ' });
     } finally { setLoading(false); }
   };
 
@@ -61,63 +86,51 @@ function SubstituteModal({ cls, onClose, onSuccess }) {
       <div className="t-modal">
         <div className="t-modal-header">
           <div className="t-modal-title">
-            <span className="t-modal-icon">🔄</span>
-            Nhờ giáo viên khác dạy thay
+            <span className="t-modal-icon">!</span>
+            Xin nghỉ lớp
           </div>
-          <button className="t-modal-close" onClick={onClose}>✕</button>
+          <button className="t-modal-close" onClick={onClose}>x</button>
         </div>
 
         <div className="t-modal-class-info">
           <div className="t-modal-class-name">{cls.name}</div>
           <div className="t-modal-class-meta">
-            <span>📅 {DAYS_VI[cls.day_of_week]}</span>
-            <span>🕐 {fmtTime(cls.start_time)} - {fmtTime(cls.end_time)}</span>
+            <span>{DAYS_VI[cls.day_of_week]}</span>
+            <span>{fmtTime(cls.start_time)} - {fmtTime(cls.end_time)}</span>
             <span className={`t-type-badge ${cls.type}`}>{cls.type === 'vip' ? 'VIP' : 'Trải nghiệm'}</span>
           </div>
         </div>
 
         <div className="t-modal-body">
           <div className="t-modal-section">
-            <label className="t-modal-label">
-              <span className="t-dot-green"></span>
-              Giáo viên đang online ({loadingTeachers ? '...' : teachers.length} người)
-            </label>
-            {loadingTeachers ? (
-              <div className="t-modal-loading">Đang tải danh sách giáo viên...</div>
-            ) : teachers.length === 0 ? (
-              <div className="t-modal-empty">
-                <span>😔</span>
-                <span>Hiện không có giáo viên nào đang online</span>
-              </div>
-            ) : (
-              <div className="t-teacher-grid">
-                {teachers.map(t => (
-                  <div
-                    key={t.id}
-                    className={`t-teacher-option ${selectedId == t.id ? 'selected' : ''}`}
-                    onClick={() => setSelectedId(t.id)}
-                  >
-                    <div className="t-teacher-avatar">{t.full_name.charAt(0)}</div>
-                    <div className="t-teacher-detail">
-                      <div className="t-teacher-name">{t.full_name}</div>
-                      <div className="t-teacher-meta">{t.class_count} lớp đang dạy</div>
-                    </div>
-                    <div className="t-online-dot"></div>
-                    {selectedId == t.id && <div className="t-check">✓</div>}
-                  </div>
-                ))}
-              </div>
-            )}
+            <label className="t-modal-label">Buổi học *</label>
+            <select className="t-modal-select" value={selectedScheduleId} onChange={e => setSelectedScheduleId(e.target.value)}>
+              {schedules.map(schedule => (
+                <option key={schedule.schedule_id} value={schedule.schedule_id}>
+                  {scheduleLabel(schedule)}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="t-modal-section">
-            <label className="t-modal-label">Lý do hủy lớp</label>
+            <label className="t-modal-label">Ngày nghỉ *</label>
+            <input
+              className="t-modal-input"
+              type="date"
+              value={leaveDate}
+              onChange={e => setLeaveDate(e.target.value)}
+            />
+          </div>
+
+          <div className="t-modal-section">
+            <label className="t-modal-label">Lý do nghỉ *</label>
             <textarea
               className="t-modal-textarea"
               placeholder="Ví dụ: Bận việc gia đình, bệnh, công việc đột xuất..."
               value={reason}
               onChange={e => setReason(e.target.value)}
-              rows={3}
+              rows={4}
             />
           </div>
 
@@ -125,22 +138,23 @@ function SubstituteModal({ cls, onClose, onSuccess }) {
         </div>
 
         <div className="t-modal-footer">
-          <button className="t-btn-cancel" onClick={onClose}>Huỷ bỏ</button>
+          <button className="t-btn-cancel" onClick={onClose}>Hủy bỏ</button>
           <button
             className="t-btn-send"
             onClick={handleSend}
-            disabled={loading || !selectedId || teachers.length === 0}
+            disabled={loading || !reason.trim()}
           >
-            {loading ? 'Đang gửi...' : '📨 Gửi yêu cầu'}
+            {loading ? 'Đang gửi...' : 'Gửi xin nghỉ'}
           </button>
         </div>
       </div>
     </div>
   );
 }
-
 // ---- Modal điểm danh ----
 function AttendanceModal({ cls, onClose, onSaved }) {
+  const schedules = getClassSchedules(cls);
+  const [selectedScheduleId, setSelectedScheduleId] = useState(String(schedules[0]?.schedule_id || ''));
   const [sessionDate, setSessionDate] = useState(todayISO());
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -225,6 +239,20 @@ function AttendanceModal({ cls, onClose, onSaved }) {
         <div className="t-modal-body">
           <div className="t-att-toolbar">
             <div className="t-att-date">
+              <label>Buổi học</label>
+              <select
+                className="t-modal-select"
+                value={selectedScheduleId}
+                onChange={e => setSelectedScheduleId(e.target.value)}
+              >
+                {schedules.map(schedule => (
+                  <option key={schedule.schedule_id} value={schedule.schedule_id}>
+                    {scheduleLabel(schedule)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="t-att-date">
               <label>Ngày học</label>
               <input
                 type="date"
@@ -302,89 +330,117 @@ function AttendanceModal({ cls, onClose, onSaved }) {
   );
 }
 
-// ---- Class Card ----
-function ClassCard({ cls, onCancelRequest }) {
+// ---- Class Detail Page ----
+function ClassDetailPage({ classes, selectedId, onSelect, onCancelRequest }) {
+  const selectedClass = classes.find(cls => String(cls.id) === String(selectedId)) || classes[0];
   const [showModal, setShowModal] = useState(false);
   const [showAttendance, setShowAttendance] = useState(false);
+  const schedules = selectedClass ? getClassSchedules(selectedClass) : [];
+
+  if (!selectedClass) return null;
 
   return (
     <>
-      <div className="t-cls-card">
-        <div className="t-cls-card-top">
-          <div className="t-cls-icon-wrap">
-            <svg width="32" height="32" viewBox="0 0 48 48" fill="none">
-              <rect x="4" y="8" width="40" height="32" rx="4" fill="#2d7a3a" opacity="0.12" />
-              <rect x="4" y="8" width="40" height="32" rx="4" stroke="#2d7a3a" strokeWidth="2" />
-              <line x1="4" y1="18" x2="44" y2="18" stroke="#2d7a3a" strokeWidth="2" />
-              <circle cx="24" cy="30" r="6" fill="#2d7a3a" opacity="0.35" />
-            </svg>
-          </div>
-          <div className="t-cls-card-info">
-            <div className="t-cls-card-name">{cls.name}</div>
-            <span className={`t-type-badge ${cls.type}`}>{cls.type === 'vip' ? 'VIP' : 'Trải nghiệm'}</span>
-          </div>
-        </div>
-
-        <div className="t-cls-card-meta">
-          <div className="t-cls-meta-row">
-            <span className="t-meta-icon">👥</span>
-            <span>{cls.student_count ?? 0} học viên</span>
-          </div>
-          <div className="t-cls-meta-row">
-            <span className="t-meta-icon">✓</span>
-            <span>{cls.session_count ?? 0} buổi đã dạy</span>
-          </div>
-          <div className="t-cls-meta-row">
-            <span className="t-meta-icon">📅</span>
-            <span>{DAYS_VI[cls.day_of_week]}</span>
-          </div>
-          <div className="t-cls-meta-row">
-            <span className="t-meta-icon">🕐</span>
-            <span>{fmtTime(cls.start_time)} - {fmtTime(cls.end_time)}</span>
-          </div>
-          {cls.description && (
-            <div className="t-cls-meta-row">
-              <span className="t-meta-icon">📝</span>
-              <span className="t-cls-desc">{cls.description}</span>
-            </div>
-          )}
-          {cls.class_link && (
-            <div className="t-cls-meta-row">
-              <span className="t-meta-icon">🔗</span>
-              <a
-                className="t-class-link"
-                href={getClassLinkHref(cls.class_link)}
-                target="_blank"
-                rel="noreferrer"
-                title={cls.class_link}
+      <div className="t-class-page">
+        <aside className="t-class-list-panel">
+          <div className="t-class-list-title">Danh sách lớp</div>
+          <div className="t-class-list">
+            {classes.map(cls => (
+              <button
+                key={cls.id}
+                className={`t-class-list-item ${String(cls.id) === String(selectedClass.id) ? 'active' : ''}`}
+                onClick={() => onSelect(cls.id)}
               >
-                Vào lớp học
-              </a>
-            </div>
-          )}
-        </div>
+                <span className="t-class-list-name">{cls.name}</span>
+                <span className={`t-type-badge ${cls.type}`}>{cls.type === 'vip' ? 'VIP' : 'Trải nghiệm'}</span>
+              </button>
+            ))}
+          </div>
+        </aside>
 
-        <div className="t-cls-actions">
-          <button className="t-btn-attendance" onClick={() => setShowAttendance(true)}>
-            Điểm danh
-          </button>
-          <button className="t-btn-cancel-class" onClick={() => setShowModal(true)}>
-            🔄 Nhờ GV khác dạy thay
-          </button>
-        </div>
+        <section className="t-class-detail">
+          <div className="t-class-detail-head">
+            <div>
+              <div className="t-class-eyebrow">{selectedClass.type === 'vip' ? 'Lớp VIP' : 'Lớp trải nghiệm'}</div>
+              <h2 className="t-class-detail-title">{selectedClass.name}</h2>
+            </div>
+            <span className={`t-type-badge ${selectedClass.type}`}>{selectedClass.type === 'vip' ? 'VIP' : 'Trải nghiệm'}</span>
+          </div>
+
+          <div className="t-class-stats">
+            <div className="t-class-stat">
+              <span>Học viên</span>
+              <strong>{selectedClass.student_count ?? 0}</strong>
+            </div>
+            <div className="t-class-stat">
+              <span>Buổi đã dạy</span>
+              <strong>{selectedClass.session_count ?? 0}</strong>
+            </div>
+            <div className="t-class-stat">
+              <span>Tổng buổi</span>
+              <strong>{selectedClass.total_sessions || 10}</strong>
+            </div>
+          </div>
+
+          <div className="t-class-info-grid">
+            <div className="t-class-info-block">
+              <label>Lịch học trong tuần</label>
+              <div className="t-schedule-list">
+                {schedules.map(schedule => (
+                  <span className="t-schedule-chip" key={schedule.schedule_id}>
+                    {scheduleLabel(schedule)}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="t-class-info-block">
+              <label>Link lớp học</label>
+              {selectedClass.class_link ? (
+                <a
+                  className="t-class-link"
+                  href={getClassLinkHref(selectedClass.class_link)}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={selectedClass.class_link}
+                >
+                  Vào lớp học
+                </a>
+              ) : (
+                <span className="t-muted">Chưa có link</span>
+              )}
+            </div>
+
+            <div className="t-class-info-block full">
+              <label>Mô tả</label>
+              <div className="t-class-description">
+                {selectedClass.description || 'Chưa có mô tả'}
+              </div>
+            </div>
+          </div>
+
+          <div className="t-class-actions">
+            <button className="t-btn-attendance" onClick={() => setShowAttendance(true)}>
+              Điểm danh
+            </button>
+            <button className="t-btn-cancel-class" onClick={() => setShowModal(true)}>
+              Xin nghỉ
+            </button>
+          </div>
+        </section>
       </div>
 
       {showAttendance && (
         <AttendanceModal
-          cls={cls}
+          cls={selectedClass}
           onClose={() => setShowAttendance(false)}
           onSaved={onCancelRequest}
         />
       )}
 
       {showModal && (
-        <SubstituteModal
-          cls={cls}
+        <LeaveRequestModal
+          cls={selectedClass}
           onClose={() => setShowModal(false)}
           onSuccess={onCancelRequest}
         />
@@ -392,12 +448,12 @@ function ClassCard({ cls, onCancelRequest }) {
     </>
   );
 }
-
 // ---- Main ----
 export default function TeacherClasses({ type = 'all' }) {
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [selectedClassId, setSelectedClassId] = useState(null);
 
   const titleMap = { vip: 'Lịch dạy lớp VIP', trial: 'Lịch dạy lớp Trải nghiệm', all: 'Tất cả lớp học' };
   const url = type === 'all'
@@ -416,6 +472,12 @@ export default function TeacherClasses({ type = 'all' }) {
   }, [url, type]);
 
   useEffect(() => { fetchClasses(); }, [fetchClasses, refreshKey]);
+  const displayClasses = useMemo(() => groupClassesById(classes), [classes]);
+  useEffect(() => {
+    if (displayClasses.length > 0 && !displayClasses.some(cls => String(cls.id) === String(selectedClassId))) {
+      setSelectedClassId(displayClasses[0].id);
+    }
+  }, [displayClasses, selectedClassId]);
 
   return (
     <div className="t-page">
@@ -428,21 +490,18 @@ export default function TeacherClasses({ type = 'all' }) {
 
       {loading ? (
         <div className="t-loading">Đang tải...</div>
-      ) : classes.length === 0 ? (
+      ) : displayClasses.length === 0 ? (
         <div className="t-empty-state">
           <div className="t-empty-icon">📚</div>
           <div>Chưa có lớp học nào</div>
         </div>
       ) : (
-        <div className="t-cls-grid">
-          {classes.map((cls, i) => (
-            <ClassCard
-              key={cls.schedule_id || i}
-              cls={cls}
-              onCancelRequest={() => setRefreshKey(k => k + 1)}
-            />
-          ))}
-        </div>
+        <ClassDetailPage
+          classes={displayClasses}
+          selectedId={selectedClassId}
+          onSelect={setSelectedClassId}
+          onCancelRequest={() => setRefreshKey(k => k + 1)}
+        />
       )}
     </div>
   );

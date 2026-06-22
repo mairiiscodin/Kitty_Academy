@@ -1,13 +1,39 @@
 // StudentMyClasses.js
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 const DAYS_VI = ['Chủ nhật','Thứ 2','Thứ 3','Thứ 4','Thứ 5','Thứ 6','Thứ 7'];
 
+function fmtTime(t) { return t ? t.substring(0, 5) : ''; }
+function scheduleLabel(schedule) {
+  return `${DAYS_VI[schedule.day_of_week]} ${fmtTime(schedule.start_time)} - ${fmtTime(schedule.end_time)}`;
+}
+function groupClassesById(rows) {
+  const byId = new Map();
+  rows.forEach(row => {
+    const schedule = {
+      schedule_id: row.schedule_id,
+      day_of_week: row.day_of_week,
+      start_time: row.start_time,
+      end_time: row.end_time,
+    };
+    if (!byId.has(row.id)) byId.set(row.id, { ...row, schedules: [] });
+    const grouped = byId.get(row.id);
+    if (schedule.schedule_id && !grouped.schedules.some(s => s.schedule_id === schedule.schedule_id)) {
+      grouped.schedules.push(schedule);
+    }
+  });
+  return Array.from(byId.values()).map(row => ({
+    ...row,
+    schedules: row.schedules.sort((a, b) => Number(a.day_of_week) - Number(b.day_of_week) || String(a.start_time).localeCompare(String(b.start_time))),
+  }));
+}
+
 export function StudentMyClasses() {
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedClassId, setSelectedClassId] = useState(null);
 
   useEffect(() => {
     axios.get(`${API}/student/my-classes`)
@@ -16,70 +42,94 @@ export function StudentMyClasses() {
       .finally(() => setLoading(false));
   }, []);
 
+  const displayClasses = useMemo(() => groupClassesById(classes), [classes]);
+  const selectedClass = displayClasses.find(cls => String(cls.id) === String(selectedClassId)) || displayClasses[0];
+
+  useEffect(() => {
+    if (displayClasses.length > 0 && !displayClasses.some(cls => String(cls.id) === String(selectedClassId))) {
+      setSelectedClassId(displayClasses[0].id);
+    }
+  }, [displayClasses, selectedClassId]);
+
+  const progressPct = selectedClass?.total_sessions
+    ? Math.round(((selectedClass.learned_sessions ?? 0) / selectedClass.total_sessions) * 100)
+    : 0;
+
   return (
     <div className="s-page">
       <h1 className="s-page-title">Lớp của tôi</h1>
-      <p className="s-page-sub">Các lớp học bạn đang đăng ký tại trung tâm</p>
+      <p className="s-page-sub">Thông tin lớp học bạn đang đăng ký tại trung tâm</p>
       {loading ? <div className="s-loading">Đang tải...</div> :
-        classes.length === 0 ? (
-          <div className="s-empty-state"><div className="s-empty-icon">📚</div><div>Chưa đăng ký lớp nào</div></div>
+        displayClasses.length === 0 ? (
+          <div className="s-empty-state"><div className="s-empty-icon">!</div><div>Chưa đăng ký lớp nào</div></div>
         ) : (
-          <div className="s-cls-grid">
-            {classes.map((cls, i) => (
-              <div key={cls.schedule_id || i} className="s-cls-card">
-                <div className="s-cls-card-header">
-                  <div className="s-cls-icon">
-                    <svg width="32" height="32" viewBox="0 0 48 48" fill="none">
-                      <rect x="4" y="8" width="40" height="32" rx="4" fill="#2d7a3a" opacity="0.12"/>
-                      <rect x="4" y="8" width="40" height="32" rx="4" stroke="#2d7a3a" strokeWidth="2"/>
-                      <line x1="4" y1="18" x2="44" y2="18" stroke="#2d7a3a" strokeWidth="2"/>
-                      <circle cx="24" cy="30" r="6" fill="#2d7a3a" opacity="0.35"/>
-                    </svg>
-                  </div>
-                  <div>
-                    <div className="s-cls-name">{cls.name}</div>
+          <div className="s-class-page">
+            <aside className="s-class-list-panel">
+              <div className="s-class-list-title">Danh sách lớp</div>
+              <div className="s-class-list-detail">
+                {displayClasses.map(cls => (
+                  <button
+                    key={cls.id}
+                    className={`s-class-list-item ${String(cls.id) === String(selectedClass?.id) ? 'active' : ''}`}
+                    onClick={() => setSelectedClassId(cls.id)}
+                  >
+                    <span>{cls.name}</span>
                     <span className={`s-type-badge ${cls.type}`}>{cls.type === 'vip' ? 'VIP' : 'Trải nghiệm'}</span>
-                  </div>
-                </div>
-                <div className="s-cls-session-summary">
-                  <div>
-                    <strong>{cls.learned_sessions ?? 0}</strong>
-                    <span>buổi đã học</span>
-                  </div>
-                  <div>
-                    <strong>{cls.total_sessions ?? 10}</strong>
-                    <span>tổng buổi</span>
-                  </div>
-                  <div className="s-progress-bar">
-                    <div className="s-progress-fill" style={{width: `${cls.total_sessions ? Math.round((cls.learned_sessions / cls.total_sessions) * 100) : 0}%`}}></div>
-                  </div>
-                  {(cls.absent_sessions ?? 0) > 0 && (
-                    <div>
-                      <strong>{cls.absent_sessions}</strong>
-                      <span>buổi vắng</span>
-                    </div>
-                  )}
-                </div>
-                <div className="s-cls-details">
-                  <div className="s-cls-detail-row"><span>👨‍🏫</span><span>{cls.teacher_name}</span></div>
-                  <div className="s-cls-detail-row"><span>📅</span><span>{DAYS_VI[cls.day_of_week]}</span></div>
-                  <div className="s-cls-detail-row"><span>🕐</span><span>{cls.start_time?.substring(0,5)} - {cls.end_time?.substring(0,5)}</span></div>
-                  <div className="s-cls-detail-row"><span>📝</span><span>{cls.description || 'Không có mô tả'}</span></div>
-                  {cls.enrollment_date && (
-                    <div className="s-cls-detail-row"><span>🗓️</span>
-                      <span>Ngày đăng ký: {new Date(cls.enrollment_date).toLocaleDateString('vi-VN')}</span>
-                    </div>
-                  )}
-                </div>
+                  </button>
+                ))}
               </div>
-            ))}
+            </aside>
+
+            <section className="s-class-detail-page">
+              <div className="s-class-detail-head">
+                <div>
+                  <div className="s-class-eyebrow">{selectedClass.type === 'vip' ? 'Lớp VIP' : 'Lớp trải nghiệm'}</div>
+                  <h2 className="s-class-detail-title">{selectedClass.name}</h2>
+                </div>
+                <span className={`s-type-badge ${selectedClass.type}`}>{selectedClass.type === 'vip' ? 'VIP' : 'Trải nghiệm'}</span>
+              </div>
+
+              <div className="s-class-stats">
+                <div><strong>{selectedClass.learned_sessions ?? 0}</strong><span>buổi đã học</span></div>
+                <div><strong>{selectedClass.total_sessions ?? 10}</strong><span>tổng buổi</span></div>
+                <div><strong>{selectedClass.absent_sessions ?? 0}</strong><span>buổi vắng</span></div>
+              </div>
+
+              <div className="s-progress-bar s-class-progress">
+                <div className="s-progress-fill" style={{ width: `${progressPct}%` }}></div>
+              </div>
+
+              <div className="s-class-info-grid">
+                <div className="s-class-info-block">
+                  <label>Giáo viên</label>
+                  <div>{selectedClass.teacher_name || 'Chưa có giáo viên'}</div>
+                </div>
+                <div className="s-class-info-block">
+                  <label>Lịch học</label>
+                  <div className="s-schedule-list">
+                    {selectedClass.schedules.map(item => (
+                      <span className="s-schedule-chip" key={item.schedule_id}>{scheduleLabel(item)}</span>
+                    ))}
+                  </div>
+                </div>
+                <div className="s-class-info-block full">
+                  <label>Mô tả</label>
+                  <div>{selectedClass.description || 'Không có mô tả'}</div>
+                </div>
+                {selectedClass.enrollment_date && (
+                  <div className="s-class-info-block full">
+                    <label>Ngày đăng ký</label>
+                    <div>{new Date(selectedClass.enrollment_date).toLocaleDateString('vi-VN')}</div>
+                  </div>
+                )}
+              </div>
+            </section>
           </div>
         )
       }
     </div>
   );
 }
-
 // =============================================
 
 const TIME_SLOTS = [

@@ -440,17 +440,68 @@ const ClassesPage = ({ type }) => {
   );
 };
 
-const TablePage = ({ title, fetchUrl, columns }) => {
+const AddStudentModal = ({ onClose, onSaved }) => {
+  const [fullName, setFullName] = useState('');
+  const [err, setErr] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSave = async () => {
+    if (!fullName.trim()) return setErr('Vui lòng nhập tên học viên');
+
+    setLoading(true);
+    setErr('');
+    try {
+      await axios.post(`${API}/admission/students`, { full_name: fullName.trim() });
+      onSaved();
+    } catch (e) {
+      setErr(e.response?.data?.message || 'Lỗi thêm học viên');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <div className="modal-header">
+          <h3 className="modal-title">Thêm học viên</h3>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          {err && <div className="form-msg error">{err}</div>}
+          <div className="form-group">
+            <label>Tên học viên *</label>
+            <input
+              value={fullName}
+              placeholder="Nhập tên học viên"
+              onChange={e => setFullName(e.target.value)}
+              autoFocus
+            />
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button className="btn-secondary" onClick={onClose}>Hủy</button>
+          <button className="btn-primary" onClick={handleSave} disabled={loading}>
+            {loading ? 'Đang thêm...' : 'Thêm học viên'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const TablePage = ({ title, fetchUrl, columns, headerAction, refreshKey = 0 }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
   useEffect(() => {
+    setLoading(true);
     axios.get(fetchUrl)
       .then(res => setData(Object.values(res.data).find(value => Array.isArray(value)) || []))
       .catch(() => setData([]))
       .finally(() => setLoading(false));
-  }, [fetchUrl]);
+  }, [fetchUrl, refreshKey]);
 
   const filtered = data.filter(row =>
     Object.values(row).some(value => String(value).toLowerCase().includes(search.toLowerCase()))
@@ -463,6 +514,7 @@ const TablePage = ({ title, fetchUrl, columns }) => {
           <h1 className="page-title">{title}</h1>
           <p className="page-subtitle">{filtered.length} bản ghi</p>
         </div>
+        {headerAction}
       </div>
       <div className="search-bar">
         <span className="search-icon"><SearchIcon/></span>
@@ -480,7 +532,7 @@ const TablePage = ({ title, fetchUrl, columns }) => {
               ) : filtered.map((row, index) => (
                 <tr key={row.id || index}>
                   {columns.map(col => (
-                    <td key={col.key}>{col.render ? col.render(row[col.key], row) : (row[col.key] ?? '-')}</td>
+                    <td key={col.key}>{col.render ? col.render(row[col.key], row, index) : (row[col.key] ?? '—')}</td>
                   ))}
                 </tr>
               ))}
@@ -489,6 +541,42 @@ const TablePage = ({ title, fetchUrl, columns }) => {
         </div>
       )}
     </div>
+  );
+};
+
+const AdmissionStudentsPage = ({ columns }) => {
+  const [showAdd, setShowAdd] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [toast, setToast] = useState('');
+
+  const handleSaved = () => {
+    setShowAdd(false);
+    setRefreshKey(prev => prev + 1);
+    setToast('Đã thêm học viên và gửi thông báo cho admin');
+    setTimeout(() => setToast(''), 3000);
+  };
+
+  return (
+    <>
+      {toast && <div className="toast toast-ok">{toast}</div>}
+      <TablePage
+        title="Danh sách học viên"
+        fetchUrl={`${API}/admission/students`}
+        columns={columns}
+        refreshKey={refreshKey}
+        headerAction={(
+          <button className="btn-primary btn-add" onClick={() => setShowAdd(true)}>
+            <PlusIcon/> Thêm học viên
+          </button>
+        )}
+      />
+      {showAdd && (
+        <AddStudentModal
+          onClose={() => setShowAdd(false)}
+          onSaved={handleSaved}
+        />
+      )}
+    </>
   );
 };
 
@@ -507,12 +595,21 @@ export default function AdmissionDashboard() {
   };
 
   const peopleCols = [
-    { key: 'id', label: '#' },
+    { key: 'stt', label: 'STT', render: (_value, _row, index) => index + 1 },
     { key: 'full_name', label: 'Họ tên' },
     { key: 'username', label: 'Tài khoản' },
     { key: 'email', label: 'Email' },
     { key: 'is_active', label: 'Trạng thái', render: value => <StatusBadge val={value}/> },
-    { key: 'created_at', label: 'Ngày tạo', render: value => value ? new Date(value).toLocaleDateString('vi-VN') : '-' },
+    { key: 'created_at', label: 'Ngày tạo', render: value => value ? new Date(value).toLocaleDateString('vi-VN') : '—' },
+  ];
+  const studentCols = [
+    { key: 'stt', label: 'STT', render: (_value, _row, index) => index + 1 },
+    { key: 'full_name', label: 'Họ tên' },
+    { key: 'username', label: 'Tài khoản' },
+    { key: 'email', label: 'Email' },
+    { key: 'class_names', label: 'Mã lớp', render: value => value || <span className="td-empty">Chưa có lớp</span> },
+    { key: 'is_active', label: 'Trạng thái', render: value => <StatusBadge val={value}/> },
+    { key: 'created_at', label: 'Ngày tạo', render: value => value ? new Date(value).toLocaleDateString('vi-VN') : '—' },
   ];
 
   return (
@@ -524,7 +621,7 @@ export default function AdmissionDashboard() {
           <Route path="/classes/vip" element={<ClassesPage type="vip"/>}/>
           <Route path="/classes/trial" element={<ClassesPage type="trial"/>}/>
           <Route path="/teachers" element={<TablePage title="Danh sách giáo viên" fetchUrl={`${API}/admission/teachers`} columns={peopleCols}/>}/>
-          <Route path="/students" element={<TablePage title="Danh sách học viên" fetchUrl={`${API}/admission/students`} columns={peopleCols}/>}/>
+          <Route path="/students" element={<AdmissionStudentsPage columns={studentCols}/>}/>
         </Routes>
       </main>
     </div>

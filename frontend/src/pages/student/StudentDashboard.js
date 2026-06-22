@@ -5,7 +5,6 @@ import { useAuth } from '../../context/AuthContext';
 import StudentHome from './StudentHome';
 import StudentMyClasses from './StudentMyClasses';
 import StudentSchedule from './StudentSchedule';
-import StudentGrades from './StudentGrades';
 import StudentComments from './StudentComments';
 import StudentNotifications from './StudentNotifications';
 import './Student.css';
@@ -22,7 +21,6 @@ const Ico = ({ d, size = 16 }) => (
 const HomeIcon    = () => <Ico d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z M9 22V12h6v10" />;
 const ClassIcon   = () => <Ico d="M22 10v6M2 10l10-5 10 5-10 5-10-5z M6 12v5c3 3 9 3 12 0v-5" />;
 const CalIcon     = () => <Ico d="M8 2v4M16 2v4M3 8h18M3 6a2 2 0 012-2h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6z" />;
-const GradeIcon   = () => <Ico d="M9 11l3 3L22 4 M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />;
 const CommentIcon = () => <Ico d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />;
 const BellIcon    = () => <Ico d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" />;
 const SettingsIcon= () => <Ico d="M12 20a8 8 0 100-16 8 8 0 000 16z M12 14a2 2 0 100-4 2 2 0 000 4z" />;
@@ -77,9 +75,6 @@ const Sidebar = ({ user, unread, onLogout }) => {
               </NavLink>
               <NavLink to="/student/schedule" className={({ isActive }) => `s-nav-item${isActive ? ' active' : ''}`}>
                 <CalIcon /> Thời khóa biểu
-              </NavLink>
-              <NavLink to="/student/grades" className={({ isActive }) => `s-nav-item${isActive ? ' active' : ''}`}>
-                <GradeIcon /> Bảng điểm
               </NavLink>
             </div>
           )}
@@ -152,7 +147,6 @@ export default function StudentDashboard() {
           <Route path="/" element={<StudentHome />} />
           <Route path="/my-classes" element={<StudentMyClasses />} />
           <Route path="/schedule" element={<StudentSchedule />} />
-          <Route path="/grades" element={<StudentGrades />} />
           <Route path="/comments" element={<StudentComments />} />
           <Route path="/notifications" element={<StudentNotifications onRead={fetchUnread} />} />
         </Routes>
