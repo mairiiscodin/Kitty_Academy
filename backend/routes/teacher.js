@@ -16,13 +16,23 @@ const teacherOnly = (req, res, next) => {
 
 const isDateString = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '');
 
+const classStudentCountSql = `
+  CASE
+    WHEN c.type = 'trial' AND NULLIF(TRIM(c.trial_student_name), '') IS NOT NULL THEN 1
+    ELSE COUNT(DISTINCT st.id)
+  END as student_count
+`;
+
 const getTeacherClass = async (conn, classId, teacherId) => {
   const [rows] = await conn.query(
     `SELECT c.id, c.name, c.type, s.day_of_week, s.start_time, s.end_time, s.id as schedule_id,
-            (SELECT COUNT(DISTINCT sc.session_date) FROM session_comments sc WHERE sc.class_id = c.id) as session_count
+            (SELECT COUNT(DISTINCT sc.session_date) FROM session_comments sc WHERE sc.class_id = c.id) as session_count,
+            ${classStudentCountSql}
      FROM classes c
      JOIN schedules s ON s.class_id = c.id AND s.teacher_id = ? AND s.is_active = TRUE
+     LEFT JOIN students st ON st.class_id = c.id
      WHERE c.id = ? AND c.is_active = TRUE
+     GROUP BY c.id, s.id
      LIMIT 1`,
     [teacherId, classId]
   );
@@ -67,7 +77,7 @@ router.get('/dashboard', teacherOnly, async (req, res) => {
     const [myClasses] = await db.query(
       `SELECT c.*, s.day_of_week, s.start_time, s.end_time, s.id as schedule_id,
               (SELECT COUNT(DISTINCT sc.session_date) FROM session_comments sc WHERE sc.class_id = c.id) as session_count,
-              COUNT(DISTINCT st.id) as student_count
+              ${classStudentCountSql}
        FROM classes c
        JOIN schedules s ON s.class_id = c.id AND s.teacher_id = ? AND s.is_active = TRUE
        LEFT JOIN students st ON st.class_id = c.id
@@ -116,7 +126,7 @@ router.get('/classes/vip', teacherOnly, async (req, res) => {
     const [rows] = await db.query(
       `SELECT c.*, s.day_of_week, s.start_time, s.end_time, s.id as schedule_id,
               (SELECT COUNT(DISTINCT sc.session_date) FROM session_comments sc WHERE sc.class_id = c.id) as session_count,
-              COUNT(DISTINCT st.id) as student_count
+              ${classStudentCountSql}
        FROM classes c
        JOIN schedules s ON s.class_id = c.id AND s.teacher_id = ? AND s.is_active = TRUE
        LEFT JOIN students st ON st.class_id = c.id
@@ -137,7 +147,7 @@ router.get('/classes/trial', teacherOnly, async (req, res) => {
     const [rows] = await db.query(
       `SELECT c.*, s.day_of_week, s.start_time, s.end_time, s.id as schedule_id,
               (SELECT COUNT(DISTINCT sc.session_date) FROM session_comments sc WHERE sc.class_id = c.id) as session_count,
-              COUNT(DISTINCT st.id) as student_count
+              ${classStudentCountSql}
        FROM classes c
        JOIN schedules s ON s.class_id = c.id AND s.teacher_id = ? AND s.is_active = TRUE
        LEFT JOIN students st ON st.class_id = c.id

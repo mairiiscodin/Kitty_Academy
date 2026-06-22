@@ -107,6 +107,26 @@ const validateClassSchedules = (res, schedules) => {
   return true;
 };
 
+const notifyTeacherClassCreated = async (conn, { teacherId, senderId, className, classType, schedules }) => {
+  if (!teacherId) return;
+
+  const scheduleText = schedules.length > 0
+    ? ` Lich hoc: ${schedules.map(s => `thu ${Number(s.day_of_week) + 1}, ${s.start_time}-${s.end_time}`).join('; ')}.`
+    : '';
+  const typeLabel = classType === 'trial' ? 'trai nghiem' : 'VIP';
+
+  await conn.query(
+    'INSERT INTO notifications (user_id, sender_id, type, title, message) VALUES (?, ?, ?, ?, ?)',
+    [
+      teacherId,
+      senderId,
+      'system',
+      `Ban duoc phan cong lop ${className}`,
+      `Ban vua duoc phan cong phu trach lop ${typeLabel} "${className}".${scheduleText}`
+    ]
+  );
+};
+
 router.use(authMiddleware, adminOnly);
 
 // ===================== DASHBOARD =====================
@@ -228,7 +248,10 @@ router.get('/classes', async (req, res) => {
   try {
     const [rows] = await db.query(`
       SELECT c.*, u.full_name as teacher_name,
-        (SELECT COUNT(*) FROM students st WHERE st.class_id = c.id) as student_count,
+        CASE
+          WHEN c.type = 'trial' AND NULLIF(TRIM(c.trial_student_name), '') IS NOT NULL THEN 1
+          ELSE (SELECT COUNT(*) FROM students st WHERE st.class_id = c.id)
+        END as student_count,
         (SELECT COUNT(DISTINCT session_date) FROM session_comments WHERE class_id = c.id) as session_count
       FROM classes c
       LEFT JOIN users u ON c.teacher_id = u.id
@@ -416,6 +439,14 @@ router.post('/classes', async (req, res) => {
       const vals = student_ids.map(sid => [sid, classId, new Date().toISOString().slice(0,10)]);
       await conn.query('INSERT IGNORE INTO students (user_id, class_id, enrollment_date) VALUES ?', [vals]);
     }
+
+    await notifyTeacherClassCreated(conn, {
+      teacherId: teacher_id,
+      senderId: req.user.id,
+      className: name,
+      classType: type,
+      schedules,
+    });
 
     await conn.commit();
     res.json({ success: true, message: 'Táº¡o lá»›p há»c thÃ nh cÃ´ng', id: classId });

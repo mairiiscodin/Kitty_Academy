@@ -38,6 +38,26 @@ const createUniqueStudentUsername = async (conn, fullName) => {
   return `hocvien${Date.now()}`;
 };
 
+const notifyTeacherClassCreated = async (conn, { teacherId, senderId, className, classType, dayOfWeek, startTime, endTime }) => {
+  if (!teacherId) return;
+
+  const scheduleText = dayOfWeek != null && startTime && endTime
+    ? ` Lich hoc: thu ${Number(dayOfWeek) + 1}, ${startTime}-${endTime}.`
+    : '';
+  const typeLabel = classType === 'trial' ? 'trai nghiem' : 'VIP';
+
+  await conn.query(
+    'INSERT INTO notifications (user_id, sender_id, type, title, message) VALUES (?, ?, ?, ?, ?)',
+    [
+      teacherId,
+      senderId,
+      'system',
+      `Ban duoc phan cong lop ${className}`,
+      `Ban vua duoc phan cong phu trach lop ${typeLabel} "${className}".${scheduleText}`
+    ]
+  );
+};
+
 router.use(authMiddleware, admissionOnly);
 
 router.get('/dashboard', async (req, res) => {
@@ -57,7 +77,10 @@ router.get('/classes', async (req, res) => {
     const [rows] = await db.query(`
       SELECT c.*, u.full_name as teacher_name,
         s.day_of_week, s.start_time, s.end_time, s.id as schedule_id,
-        (SELECT COUNT(*) FROM students st WHERE st.class_id = c.id) as student_count,
+        CASE
+          WHEN c.type = 'trial' AND NULLIF(TRIM(c.trial_student_name), '') IS NOT NULL THEN 1
+          ELSE (SELECT COUNT(*) FROM students st WHERE st.class_id = c.id)
+        END as student_count,
         (SELECT COUNT(DISTINCT session_date) FROM session_comments WHERE class_id = c.id) as session_count
       FROM classes c
       LEFT JOIN users u ON c.teacher_id = u.id
@@ -127,6 +150,16 @@ router.post('/classes', async (req, res) => {
         [classId, teacher_id, day_of_week, start_time, end_time]
       );
     }
+
+    await notifyTeacherClassCreated(conn, {
+      teacherId: teacher_id,
+      senderId: req.user.id,
+      className: name,
+      classType: 'trial',
+      dayOfWeek: day_of_week,
+      startTime: start_time,
+      endTime: end_time,
+    });
 
     await conn.commit();
     res.json({ success: true, message: 'Đã tạo lớp trải nghiệm', id: classId });
