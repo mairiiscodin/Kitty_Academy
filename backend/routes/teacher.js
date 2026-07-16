@@ -120,7 +120,7 @@ router.get('/dashboard', teacherOnly, async (req, res) => {
 
 // ===================== LỚP HỌC =====================
 
-// Lớp VIP của giáo viên
+// Lớp chính thức của giáo viên
 router.get('/classes/vip', teacherOnly, async (req, res) => {
   try {
     const [rows] = await db.query(

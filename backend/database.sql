@@ -79,8 +79,8 @@ INSERT INTO users (username, password, full_name, role, email) VALUES
 
 -- Lớp học mẫu
 INSERT INTO classes (name, type, description) VALUES
-('Tiếng Anh VIP - Cơ bản', 'vip', 'Lớp học tiếng Anh VIP dành cho người mới bắt đầu'),
-('Tiếng Anh VIP - Nâng cao', 'vip', 'Lớp học tiếng Anh VIP nâng cao'),
+('Tiếng Anh Chính thức - Cơ bản', 'vip', 'Lớp học tiếng Anh Chính thức dành cho người mới bắt đầu'),
+('Tiếng Anh Chính thức - Nâng cao', 'vip', 'Lớp học tiếng Anh Chính thức nâng cao'),
 ('Lớp Trải nghiệm - Buổi 1', 'trial', 'Lớp học thử miễn phí buổi 1'),
 ('Lớp Trải nghiệm - Cuối tuần', 'trial', 'Lớp học thử cuối tuần');
 

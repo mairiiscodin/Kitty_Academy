@@ -97,7 +97,7 @@ const Sidebar = ({ user, unread, onLogout }) => {
           {expanded.classes && (
             <div className="nav-items">
               <NavLink to="/admin/classes/vip" className={({isActive}) => `nav-item ${isActive?'active':''}`}>
-                <CrownIcon/> Quản lí lớp Vip
+                <CrownIcon/> Quản lí lớp chính thức
               </NavLink>
               <NavLink to="/admin/classes/trial" className={({isActive}) => `nav-item ${isActive?'active':''}`}>
                 <CalendarIcon/> Quản lí lớp Trải nghiệm
@@ -154,7 +154,7 @@ const Badge = ({ color, children }) => (
 
 const TypeBadge = ({ type }) => (
   <Badge color={type === 'vip' ? '#E65100' : '#00838F'}>
-    {type === 'vip' ? 'VIP' : 'Trải nghiệm'}
+    {type === 'vip' ? 'Chính thức' : 'Trải nghiệm'}
   </Badge>
 );
 
@@ -379,7 +379,7 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
             <div className="form-group">
               <label>Loại lớp</label>
               <select value={form.type} onChange={e => set('type', e.target.value)}>
-                <option value="vip">VIP</option>
+                <option value="vip">Chính thức</option>
                 <option value="trial">Trải nghiệm</option>
               </select>
             </div>
@@ -543,7 +543,7 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
 // ================================================================
 const ClassesPage = ({ type }) => {
   const DAYS_SHORT = ['CN','T2','T3','T4','T5','T6','T7'];
-  const title = type === 'vip' ? 'Quản lí lớp VIP' : 'Quản lí lớp Trải nghiệm';
+  const title = type === 'vip' ? 'Quản lí lớp chính thức' : 'Quản lí lớp Trải nghiệm';
 
   const [classes, setClasses]     = useState([]);
   const [teachers, setTeachers]   = useState([]);
@@ -813,7 +813,7 @@ const AdminHome = ({ user, stats }) => (
         <StatCard label="Tổng tài khoản"    value={stats.total_users}    color="#2d7a3a" icon="👤"/>
         <StatCard label="Giáo viên"          value={stats.total_teachers} color="#1565C0" icon="GV"/>
         <StatCard label="Học viên"           value={stats.total_students} color="#6A1B9A" icon="🎓"/>
-        <StatCard label="Lớp VIP"            value={stats.vip_classes}    color="#E65100" icon="⭐"/>
+        <StatCard label="Lớp chính thức"            value={stats.vip_classes}    color="#E65100" icon="⭐"/>
         <StatCard label="Lớp Trải nghiệm"   value={stats.trial_classes}  color="#00838F" icon="📅"/>
         <StatCard label="Tổng lớp học"       value={stats.total_classes}  color="#2E7D32" icon="⭐"/>
       </div>

@@ -227,16 +227,16 @@ INSERT INTO users (username, password, full_name, role, email) VALUES
 ('student03', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.', 'Do Minh Anh', 'student', 'minhanh@gmail.com');
 
 INSERT INTO teachers (user_id, subject, bio) VALUES
-((SELECT id FROM users WHERE username = 'teacher01'), 'English', 'VIP and trial classes'),
-((SELECT id FROM users WHERE username = 'teacher02'), 'English', 'VIP and trial classes');
+((SELECT id FROM users WHERE username = 'teacher01'), 'English', 'Lớp chính thức và trải nghiệm'),
+((SELECT id FROM users WHERE username = 'teacher02'), 'English', 'Lớp chính thức và trải nghiệm');
 
 INSERT INTO classes
   (name, type, teacher_id, description, class_link, trial_student_name, max_students, total_sessions)
 VALUES
-  ('Tieng Anh VIP - Co ban', 'vip', (SELECT id FROM users WHERE username = 'teacher01'),
-   'Lop hoc tieng Anh VIP danh cho nguoi moi bat dau', 'https://meet.google.com/vip-basic', NULL, 30, 10),
-  ('Tieng Anh VIP - Nang cao', 'vip', (SELECT id FROM users WHERE username = 'teacher01'),
-   'Lop hoc tieng Anh VIP nang cao', 'https://meet.google.com/vip-advanced', NULL, 30, 12),
+  ('Tieng Anh Chính thức - Co ban', 'vip', (SELECT id FROM users WHERE username = 'teacher01'),
+   'Lop hoc tieng Anh Chính thức danh cho nguoi moi bat dau', 'https://meet.google.com/vip-basic', NULL, 30, 10),
+  ('Tieng Anh Chính thức - Nang cao', 'vip', (SELECT id FROM users WHERE username = 'teacher01'),
+   'Lop hoc tieng Anh Chính thức nang cao', 'https://meet.google.com/vip-advanced', NULL, 30, 12),
   ('Lop Trai nghiem - Buoi 1', 'trial', (SELECT id FROM users WHERE username = 'teacher02'),
    'Lop hoc thu mien phi buoi 1', 'https://meet.google.com/trial-1', 'Hoc sinh hoc thu 1', 1, 1),
   ('Lop Trai nghiem - Cuoi tuan', 'trial', (SELECT id FROM users WHERE username = 'teacher02'),

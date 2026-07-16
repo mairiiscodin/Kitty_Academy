@@ -113,7 +113,7 @@ const notifyTeacherClassCreated = async (conn, { teacherId, senderId, className,
   const scheduleText = schedules.length > 0
     ? ` Lich hoc: ${schedules.map(s => `thu ${Number(s.day_of_week) + 1}, ${s.start_time}-${s.end_time}`).join('; ')}.`
     : '';
-  const typeLabel = classType === 'trial' ? 'trai nghiem' : 'VIP';
+  const typeLabel = classType === 'trial' ? 'trai nghiem' : 'Chính thức';
 
   await conn.query(
     'INSERT INTO notifications (user_id, sender_id, type, title, message) VALUES (?, ?, ?, ?, ?)',

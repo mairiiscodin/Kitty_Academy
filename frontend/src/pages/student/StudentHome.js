@@ -83,7 +83,7 @@ export default function StudentHome() {
                   <div className="s-chip-bar" />
                   <div className="s-chip-meta">
                     <span className={`s-type-badge ${classItem.type}`}>
-                      {classItem.type === 'vip' ? 'VIP' : 'Trải nghiệm'}
+                      {classItem.type === 'vip' ? 'Chính thức' : 'Trải nghiệm'}
                     </span>
                     <span className="s-chip-teacher">
                       GV: {classItem.teacher_name || 'Chưa có giáo viên'}

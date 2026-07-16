@@ -72,7 +72,7 @@ const Sidebar = ({ user, unread, onLogout }) => {
           {open.classes && (
             <div className="t-nav-items">
               <NavLink to="/teacher/classes/vip" className={({ isActive }) => `t-nav-item${isActive ? ' active' : ''}`}>
-                <CrownIcon /> Lịch dạy lớp VIP
+                <CrownIcon /> Lịch dạy lớp chính thức
               </NavLink>
               <NavLink to="/teacher/classes/trial" className={({ isActive }) => `t-nav-item${isActive ? ' active' : ''}`}>
                 <CalendarIcon /> Lịch dạy lớp trải nghiệm

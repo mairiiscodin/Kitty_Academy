@@ -74,7 +74,7 @@ export function StudentMyClasses() {
                     onClick={() => setSelectedClassId(cls.id)}
                   >
                     <span>{cls.name}</span>
-                    <span className={`s-type-badge ${cls.type}`}>{cls.type === 'vip' ? 'VIP' : 'Trải nghiệm'}</span>
+                    <span className={`s-type-badge ${cls.type}`}>{cls.type === 'vip' ? 'Chính thức' : 'Trải nghiệm'}</span>
                   </button>
                 ))}
               </div>
@@ -83,10 +83,10 @@ export function StudentMyClasses() {
             <section className="s-class-detail-page">
               <div className="s-class-detail-head">
                 <div>
-                  <div className="s-class-eyebrow">{selectedClass.type === 'vip' ? 'Lớp VIP' : 'Lớp trải nghiệm'}</div>
+                  <div className="s-class-eyebrow">{selectedClass.type === 'vip' ? 'Lớp chính thức' : 'Lớp trải nghiệm'}</div>
                   <h2 className="s-class-detail-title">{selectedClass.name}</h2>
                 </div>
-                <span className={`s-type-badge ${selectedClass.type}`}>{selectedClass.type === 'vip' ? 'VIP' : 'Trải nghiệm'}</span>
+                <span className={`s-type-badge ${selectedClass.type}`}>{selectedClass.type === 'vip' ? 'Chính thức' : 'Trải nghiệm'}</span>
               </div>
 
               <div className="s-class-stats">
@@ -259,7 +259,7 @@ export function StudentGrades() {
                   <div>
                     <div className="s-grade-card-name">{g.class_name}</div>
                     <div className="s-grade-card-meta">
-                      <span className={`s-type-badge ${g.class_type}`}>{g.class_type === 'vip' ? 'VIP' : 'Trải nghiệm'}</span>
+                      <span className={`s-type-badge ${g.class_type}`}>{g.class_type === 'vip' ? 'Chính thức' : 'Trải nghiệm'}</span>
                       <span className="s-grade-semester">Kỳ: {g.semester}</span>
                       {g.teacher_name && <span className="s-grade-teacher">GV: {g.teacher_name}</span>}
                     </div>

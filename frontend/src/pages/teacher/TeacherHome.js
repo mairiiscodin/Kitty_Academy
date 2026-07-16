@@ -106,7 +106,7 @@ export default function TeacherHome() {
       <div className="t-stats-row">
         <div className="t-stat-chip vip">
           <span className="chip-num">{stats.total_vip ?? 0}</span>
-          <span className="chip-lbl">Lớp VIP</span>
+          <span className="chip-lbl">Lớp chính thức</span>
         </div>
         <div className="t-stat-chip trial">
           <span className="chip-num">{stats.total_trial ?? 0}</span>
@@ -149,11 +149,11 @@ export default function TeacherHome() {
                 <div className="t-home-class-detail">
                   <div className="t-home-class-head">
                     <div>
-                      <div className="t-class-eyebrow">{selectedClass.type === 'vip' ? 'Lớp VIP' : 'Lớp trải nghiệm'}</div>
+                      <div className="t-class-eyebrow">{selectedClass.type === 'vip' ? 'Lớp chính thức' : 'Lớp trải nghiệm'}</div>
                       <div className="t-home-class-name">{selectedClass.name}</div>
                     </div>
                     <span className={`t-type-badge ${selectedClass.type}`}>
-                      {selectedClass.type === 'vip' ? 'VIP' : 'Thu'}
+                      {selectedClass.type === 'vip' ? 'Chính thức' : 'Thu'}
                     </span>
                   </div>
 

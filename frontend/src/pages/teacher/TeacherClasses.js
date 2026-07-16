@@ -97,7 +97,7 @@ function LeaveRequestModal({ cls, onClose, onSuccess }) {
           <div className="t-modal-class-meta">
             <span>{DAYS_VI[cls.day_of_week]}</span>
             <span>{fmtTime(cls.start_time)} - {fmtTime(cls.end_time)}</span>
-            <span className={`t-type-badge ${cls.type}`}>{cls.type === 'vip' ? 'VIP' : 'Trải nghiệm'}</span>
+            <span className={`t-type-badge ${cls.type}`}>{cls.type === 'vip' ? 'Chính thức' : 'Trải nghiệm'}</span>
           </div>
         </div>
 
@@ -352,7 +352,7 @@ function ClassDetailPage({ classes, selectedId, onSelect, onCancelRequest }) {
                 onClick={() => onSelect(cls.id)}
               >
                 <span className="t-class-list-name">{cls.name}</span>
-                <span className={`t-type-badge ${cls.type}`}>{cls.type === 'vip' ? 'VIP' : 'Trải nghiệm'}</span>
+                <span className={`t-type-badge ${cls.type}`}>{cls.type === 'vip' ? 'Chính thức' : 'Trải nghiệm'}</span>
               </button>
             ))}
           </div>
@@ -361,10 +361,10 @@ function ClassDetailPage({ classes, selectedId, onSelect, onCancelRequest }) {
         <section className="t-class-detail">
           <div className="t-class-detail-head">
             <div>
-              <div className="t-class-eyebrow">{selectedClass.type === 'vip' ? 'Lớp VIP' : 'Lớp trải nghiệm'}</div>
+              <div className="t-class-eyebrow">{selectedClass.type === 'vip' ? 'Lớp chính thức' : 'Lớp trải nghiệm'}</div>
               <h2 className="t-class-detail-title">{selectedClass.name}</h2>
             </div>
-            <span className={`t-type-badge ${selectedClass.type}`}>{selectedClass.type === 'vip' ? 'VIP' : 'Trải nghiệm'}</span>
+            <span className={`t-type-badge ${selectedClass.type}`}>{selectedClass.type === 'vip' ? 'Chính thức' : 'Trải nghiệm'}</span>
           </div>
 
           <div className="t-class-stats">
@@ -455,7 +455,7 @@ export default function TeacherClasses({ type = 'all' }) {
   const [refreshKey, setRefreshKey] = useState(0);
   const [selectedClassId, setSelectedClassId] = useState(null);
 
-  const titleMap = { vip: 'Lịch dạy lớp VIP', trial: 'Lịch dạy lớp Trải nghiệm', all: 'Tất cả lớp học' };
+  const titleMap = { vip: 'Lịch dạy lớp chính thức', trial: 'Lịch dạy lớp Trải nghiệm', all: 'Tất cả lớp học' };
   const url = type === 'all'
     ? `${API}/teacher/dashboard`
     : `${API}/teacher/classes/${type}`;

@@ -44,7 +44,7 @@ const notifyTeacherClassCreated = async (conn, { teacherId, senderId, className,
   const scheduleText = dayOfWeek != null && startTime && endTime
     ? ` Lich hoc: thu ${Number(dayOfWeek) + 1}, ${startTime}-${endTime}.`
     : '';
-  const typeLabel = classType === 'trial' ? 'trai nghiem' : 'VIP';
+  const typeLabel = classType === 'trial' ? 'trai nghiem' : 'Chính thức';
 
   await conn.query(
     'INSERT INTO notifications (user_id, sender_id, type, title, message) VALUES (?, ?, ?, ?, ?)',

@@ -29,7 +29,7 @@ const EditIcon = () => <Icon d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002
 const TrashIcon = () => <Icon d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>;
 
 const Badge = ({ color, children }) => <span className="badge" style={{ background: color }}>{children}</span>;
-const TypeBadge = ({ type }) => <Badge color={type === 'vip' ? '#E65100' : '#00838F'}>{type === 'vip' ? 'VIP' : 'Trải nghiệm'}</Badge>;
+const TypeBadge = ({ type }) => <Badge color={type === 'vip' ? '#E65100' : '#00838F'}>{type === 'vip' ? 'Chính thức' : 'Trải nghiệm'}</Badge>;
 const StatusBadge = ({ val }) => <Badge color={val ? '#2d7a3a' : '#999'}>{val ? 'Hoạt động' : 'Đã khóa'}</Badge>;
 
 const getClassLinkHref = (link) => {
@@ -188,7 +188,7 @@ const Sidebar = ({ user, onLogout }) => {
           {expanded.classes && (
             <div className="nav-items">
               <NavLink to="/admission/classes/vip" className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
-                <CrownIcon/> Danh sách lớp VIP
+                <CrownIcon/> Danh sách lớp chính thức
               </NavLink>
               <NavLink to="/admission/classes/trial" className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
                 <CalendarIcon/> Quản lí lớp trải nghiệm
@@ -248,7 +248,7 @@ const AdmissionHome = ({ user, stats }) => (
     {stats && (
       <div className="stats-grid">
         <StatCard label="Học viên" value={stats.total_students} color="#6A1B9A" icon="🎓"/>
-        <StatCard label="Lớp VIP" value={stats.vip_classes} color="#E65100" icon="⭐"/>
+        <StatCard label="Lớp chính thức" value={stats.vip_classes} color="#E65100" icon="⭐"/>
         <StatCard label="Lớp trải nghiệm" value={stats.trial_classes} color="#00838F" icon="📅"/>
         <StatCard label="Tổng lớp học" value={stats.total_classes} color="#2E7D32" icon="🏫"/>
       </div>
@@ -258,7 +258,7 @@ const AdmissionHome = ({ user, stats }) => (
 
 const ClassesPage = ({ type }) => {
   const DAYS_SHORT = ['CN','T2','T3','T4','T5','T6','T7'];
-  const title = type === 'vip' ? 'Danh sách lớp VIP' : 'Quản lí lớp trải nghiệm';
+  const title = type === 'vip' ? 'Danh sách lớp chính thức' : 'Quản lí lớp trải nghiệm';
 
   const [classes, setClasses] = useState([]);
   const [teachers, setTeachers] = useState([]);

@@ -81,7 +81,7 @@ function AllClasses() {
                   <td><strong>{cls.name}</strong></td>
                   <td>
                     <span className={`t-type-badge ${cls.type}`}>
-                      {cls.type === 'vip' ? 'VIP' : 'Trải nghiệm'}
+                      {cls.type === 'vip' ? 'Chính thức' : 'Trải nghiệm'}
                     </span>
                   </td>
                   <td>{DAYS_VI[cls.day_of_week]}</td>
