@@ -304,6 +304,34 @@ router.get('/classes/:id/students', async (req, res) => {
       WHERE st.class_id = ?
       ORDER BY u.full_name
     `, [req.params.id, req.params.id, req.params.id]);
+    const studentIds = rows.map(row => row.id);
+    let schedulesByStudent = {};
+
+    if (studentIds.length > 0) {
+      const [scheduleRows] = await db.query(
+        `SELECT st.user_id as student_id, c.id as class_id, c.name as class_name,
+                s.id as schedule_id, s.day_of_week, s.start_time, s.end_time,
+                u.full_name as teacher_name
+         FROM students st
+         JOIN classes c ON c.id = st.class_id AND c.is_active = TRUE
+         JOIN schedules s ON s.class_id = c.id AND s.is_active = TRUE
+         LEFT JOIN users u ON u.id = s.teacher_id
+         WHERE st.user_id IN (?)
+         ORDER BY s.day_of_week, s.start_time`,
+        [studentIds]
+      );
+
+      schedulesByStudent = scheduleRows.reduce((acc, schedule) => {
+        if (!acc[schedule.student_id]) acc[schedule.student_id] = [];
+        acc[schedule.student_id].push(schedule);
+        return acc;
+      }, {});
+    }
+
+    rows.forEach(row => {
+      row.schedules = schedulesByStudent[row.id] || [];
+    });
+
     res.json({ success: true, students: rows });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Lá»—i server' });
@@ -619,6 +647,29 @@ router.get('/teachers', async (req, res) => {
     const [rows] = await db.query(
       "SELECT id, username, full_name, email, is_active, created_at FROM users WHERE role='teacher' ORDER BY created_at DESC"
     );
+    const teacherIds = rows.map(row => row.id);
+    let schedulesByTeacher = {};
+
+    if (teacherIds.length > 0) {
+      const [scheduleRows] = await db.query(
+        `SELECT s.id, s.class_id, s.teacher_id, s.day_of_week, s.start_time, s.end_time, c.name as class_name
+         FROM schedules s
+         JOIN classes c ON c.id = s.class_id AND c.is_active = TRUE
+         WHERE s.is_active = TRUE AND s.teacher_id IN (?)
+         ORDER BY s.day_of_week, s.start_time`,
+        [teacherIds]
+      );
+
+      schedulesByTeacher = scheduleRows.reduce((acc, schedule) => {
+        if (!acc[schedule.teacher_id]) acc[schedule.teacher_id] = [];
+        acc[schedule.teacher_id].push(schedule);
+        return acc;
+      }, {});
+    }
+
+    rows.forEach(row => {
+      row.schedules = schedulesByTeacher[row.id] || [];
+    });
     res.json({ success: true, teachers: rows });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Lá»—i server' });
@@ -638,6 +689,34 @@ router.get('/students', async (req, res) => {
        GROUP BY u.id, u.username, u.full_name, u.email, u.is_active, u.created_at
        ORDER BY u.created_at DESC`
     );
+    const studentIds = rows.map(row => row.id);
+    let schedulesByStudent = {};
+
+    if (studentIds.length > 0) {
+      const [scheduleRows] = await db.query(
+        `SELECT st.user_id as student_id, c.id as class_id, c.name as class_name,
+                s.id as schedule_id, s.day_of_week, s.start_time, s.end_time,
+                u.full_name as teacher_name
+         FROM students st
+         JOIN classes c ON c.id = st.class_id AND c.is_active = TRUE
+         JOIN schedules s ON s.class_id = c.id AND s.is_active = TRUE
+         LEFT JOIN users u ON u.id = s.teacher_id
+         WHERE st.user_id IN (?)
+         ORDER BY s.day_of_week, s.start_time`,
+        [studentIds]
+      );
+
+      schedulesByStudent = scheduleRows.reduce((acc, schedule) => {
+        if (!acc[schedule.student_id]) acc[schedule.student_id] = [];
+        acc[schedule.student_id].push(schedule);
+        return acc;
+      }, {});
+    }
+
+    rows.forEach(row => {
+      row.schedules = schedulesByStudent[row.id] || [];
+    });
+
     res.json({ success: true, students: rows });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Lá»—i server' });

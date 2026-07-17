@@ -448,6 +448,145 @@
   border-color: #2d7a3a; box-shadow: 0 0 0 3px rgba(45,122,58,0.08);
 }
 .form-group textarea { resize: vertical; }
+.form-hint {
+  color: #8a6d1d;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.clickable-row {
+  cursor: pointer;
+}
+.clickable-row:hover td {
+  background: #f3fbf5;
+}
+
+.detail-modal {
+  max-width: 760px;
+}
+.detail-profile {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.detail-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #e8f5e9;
+  color: #2d7a3a;
+  font-size: 24px;
+  font-weight: 900;
+}
+.detail-profile h2 {
+  margin: 0;
+  color: #1a3a22;
+  font-size: 22px;
+}
+.detail-muted {
+  color: #78927d;
+  font-size: 13px;
+  margin-top: 2px;
+}
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.detail-grid div {
+  border: 1px solid #e0eee3;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fbfefc;
+}
+.detail-grid label {
+  display: block;
+  color: #6d8271;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.detail-grid span {
+  color: #1a3a22;
+  font-weight: 700;
+}
+.detail-section-title {
+  color: #1a3a22;
+  font-size: 16px;
+  font-weight: 900;
+  margin: 8px 0 10px;
+}
+.detail-table-wrap {
+  max-height: 340px;
+  overflow: auto;
+  border: 1px solid #e6f0e8;
+  border-radius: 8px;
+}
+.detail-table th,
+.detail-table td {
+  white-space: nowrap;
+}
+.detail-empty {
+  border: 1px dashed #d6e8da;
+  border-radius: 8px;
+}
+.teacher-timetable-wrap {
+  overflow: auto;
+  border: 1px solid #e6f0e8;
+  border-radius: 8px;
+}
+.teacher-timetable {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  background: #fff;
+}
+.teacher-timetable th,
+.teacher-timetable td {
+  border-bottom: 1px solid #edf5ef;
+  border-right: 1px solid #edf5ef;
+  padding: 10px;
+  vertical-align: top;
+  text-align: left;
+}
+.teacher-timetable thead th,
+.teacher-timetable tbody th {
+  background: #f7fbf8;
+  color: #2d5f36;
+  font-size: 12px;
+  font-weight: 900;
+}
+.teacher-timetable tbody th {
+  width: 78px;
+}
+.timetable-empty {
+  color: #b1bdb4;
+}
+.timetable-item {
+  display: grid;
+  gap: 3px;
+  padding: 7px 8px;
+  border-radius: 7px;
+  background: #eaf6ed;
+  color: #1a3a22;
+  font-size: 12px;
+  line-height: 1.25;
+}
+.timetable-item + .timetable-item {
+  margin-top: 6px;
+}
+.timetable-item strong {
+  font-size: 12px;
+}
+.timetable-item span {
+  color: #4f7155;
+  font-weight: 700;
+}
 
 .schedule-header {
   display: flex;

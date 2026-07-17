@@ -38,6 +38,20 @@ const getClassLinkHref = (link) => {
   return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
 };
 
+const timeValue = (value) => String(value || '').substring(0, 5);
+
+const schedulesOverlap = (a, b) => (
+  String(a.day_of_week) === String(b.day_of_week) &&
+  timeValue(a.start_time) < timeValue(b.end_time) &&
+  timeValue(a.end_time) > timeValue(b.start_time)
+);
+
+const teacherMatchesSchedule = (teacher, schedule, excludeClassId = null) => (
+  (teacher.schedules || [])
+    .filter(busy => !excludeClassId || Number(busy.class_id) !== Number(excludeClassId))
+    .every(busy => !schedulesOverlap(schedule, busy))
+);
+
 const TrialClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
   const DAYS = ['Chu nhat','Thu 2','Thu 3','Thu 4','Thu 5','Thu 6','Thu 7'];
   const [form, setForm] = useState(initial ? {
@@ -64,6 +78,20 @@ const TrialClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
   const set = (key, value) => setForm(prev => ({ ...prev, [key]: value }));
+  const currentSchedule = {
+    day_of_week: form.day_of_week,
+    start_time: form.start_time,
+    end_time: form.end_time,
+  };
+  const availableTeachers = teachers.filter(teacher => (
+    teacherMatchesSchedule(teacher, currentSchedule, mode === 'edit' ? initial?.id : null)
+  ));
+
+  useEffect(() => {
+    if (form.teacher_id && !availableTeachers.some(teacher => String(teacher.id) === String(form.teacher_id))) {
+      set('teacher_id', '');
+    }
+  }, [availableTeachers, form.teacher_id]);
 
   const handleSave = async () => {
     if (!form.name.trim()) return setErr('Vui lòng nhập tên lớp');
@@ -110,8 +138,11 @@ const TrialClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
               <label>Giáo viên phụ trách</label>
               <select value={form.teacher_id} onChange={e => set('teacher_id', e.target.value)}>
                 <option value="">Chưa chọn</option>
-                {teachers.map(teacher => <option key={teacher.id} value={teacher.id}>{teacher.full_name}</option>)}
+                {availableTeachers.map(teacher => <option key={teacher.id} value={teacher.id}>{teacher.full_name}</option>)}
               </select>
+              {availableTeachers.length === 0 && (
+                <small className="form-hint">Khong co giao vien trong vao lich hoc nay.</small>
+              )}
             </div>
             <div className="form-group">
               <label>Ngày học</label>

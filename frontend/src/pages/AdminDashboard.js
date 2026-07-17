@@ -168,6 +168,44 @@ const getClassLinkHref = (link) => {
   return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
 };
 
+const timeValue = (value) => String(value || '').substring(0, 5);
+
+const schedulesOverlap = (a, b) => (
+  String(a.day_of_week) === String(b.day_of_week) &&
+  timeValue(a.start_time) < timeValue(b.end_time) &&
+  timeValue(a.end_time) > timeValue(b.start_time)
+);
+
+const teacherMatchesSchedules = (teacher, schedules, excludeClassId = null) => {
+  const busySchedules = (teacher.schedules || []).filter(schedule => (
+    !excludeClassId || Number(schedule.class_id) !== Number(excludeClassId)
+  ));
+
+  return schedules.every(schedule => (
+    schedule.day_of_week != null &&
+    schedule.start_time &&
+    schedule.end_time &&
+    !busySchedules.some(busy => schedulesOverlap(schedule, busy))
+  ));
+};
+
+const DAYS_FULL = ['Chủ nhật','Thứ 2','Thứ 3','Thứ 4','Thứ 5','Thứ 6','Thứ 7'];
+const formatTime = (value) => timeValue(value) || '—';
+const formatDate = (value) => value ? new Date(value).toLocaleDateString('vi-VN') : '—';
+const dayColumns = [1, 2, 3, 4, 5, 6, 0];
+const timeSlots = [
+  { key: '18:00', label: '18:00 - 18:45', start: '18:00', end: '18:45' },
+  { key: '18:45', label: '18:45 - 19:30', start: '18:45', end: '19:30' },
+  { key: '19:30', label: '19:30 - 20:15', start: '19:30', end: '20:15' },
+  { key: '20:15', label: '20:15 - 21:00', start: '20:15', end: '21:00' },
+];
+
+const getSlotSchedules = (schedules, day, slot) => schedules.filter(schedule => (
+  Number(schedule.day_of_week) === Number(day) &&
+  timeValue(schedule.start_time) < slot.end &&
+  timeValue(schedule.end_time) > slot.start
+));
+
 // ---- Confirm Delete Modal ----
 const ConfirmModal = ({ item, onConfirm, onCancel, loading, title = 'Xác nhận xóa', message, confirmText = 'Xóa lớp' }) => (
   <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onCancel()}>
@@ -254,6 +292,15 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
   };
   const maxSt = Number(form.max_students) || 30;
   const isTrial = form.type === 'trial';
+  const availableTeachers = teachers.filter(teacher => (
+    teacherMatchesSchedules(teacher, form.schedules, mode === 'edit' ? initial?.id : null)
+  ));
+
+  useEffect(() => {
+    if (form.teacher_id && !availableTeachers.some(teacher => String(teacher.id) === String(form.teacher_id))) {
+      set('teacher_id', '');
+    }
+  }, [availableTeachers, form.teacher_id]);
 
   // Load students
   useEffect(() => {
@@ -404,14 +451,6 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
             </div>
 
             <div className="form-group full-col">
-              <label>Giáo viên phụ trách</label>
-              <select value={form.teacher_id} onChange={e => set('teacher_id', e.target.value)}>
-                <option value="">— Chưa chọn —</option>
-                {teachers.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
-              </select>
-            </div>
-
-            <div className="form-group full-col">
               <div className="schedule-header">
                 <label>Lịch học trong tuần</label>
                 <button type="button" className="mini-add-btn" onClick={addSchedule}>+ Thêm buổi</button>
@@ -436,6 +475,17 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
                   </div>
                 ))}
               </div>
+            </div>
+
+            <div className="form-group full-col">
+              <label>Giáo viên phụ trách</label>
+              <select value={form.teacher_id} onChange={e => set('teacher_id', e.target.value)}>
+                <option value="">— Chọn giáo viên phù hợp lịch học —</option>
+                {availableTeachers.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
+              </select>
+              {availableTeachers.length === 0 && (
+                <small className="form-hint">Không có giáo viên trống vào lịch học này.</small>
+              )}
             </div>
 
             <div className="form-group full-col">
@@ -740,10 +790,104 @@ const ClassesPage = ({ type }) => {
 // ================================================================
 // SIMPLE TABLE PAGE (giáo viên, học viên)
 // ================================================================
-const TablePage = ({ title, fetchUrl, columns }) => {
+const DetailModal = ({ type, item, onClose }) => {
+  const schedules = item?.schedules || [];
+  const isTeacher = type === 'teacher';
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal detail-modal">
+        <div className="modal-header">
+          <h3 className="modal-title">{isTeacher ? 'Chi tiết giáo viên' : 'Chi tiết học viên'}</h3>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          <div className="detail-profile">
+            <div className="detail-avatar">{item.full_name?.charAt(0) || '?'}</div>
+            <div>
+              <h2>{item.full_name}</h2>
+              <div className="detail-muted">@{item.username || '—'}</div>
+            </div>
+            <StatusBadge val={item.is_active}/>
+          </div>
+
+          <div className="detail-grid">
+            <div><label>Email</label><span>{item.email || '—'}</span></div>
+            <div><label>Ngày tạo</label><span>{formatDate(item.created_at)}</span></div>
+            {!isTeacher && <div><label>Lớp</label><span>{item.class_names || 'Chưa có lớp'}</span></div>}
+          </div>
+
+          <div className="detail-section-title">{isTeacher ? 'Lịch dạy' : 'Lịch học'}</div>
+          {schedules.length === 0 ? (
+            <div className="empty-row detail-empty">{isTeacher ? 'Chưa có lịch dạy' : 'Chưa có lịch học'}</div>
+          ) : isTeacher ? (
+            <div className="teacher-timetable-wrap">
+              <table className="teacher-timetable">
+                <thead>
+                  <tr>
+                    <th>Khung giờ</th>
+                    {dayColumns.map(day => <th key={day}>{DAYS_FULL[day]}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {timeSlots.map(slot => (
+                    <tr key={slot.key}>
+                      <th>{slot.label}</th>
+                      {dayColumns.map(day => {
+                        const slotSchedules = getSlotSchedules(schedules, day, slot);
+                        return (
+                          <td key={`${slot.key}-${day}`}>
+                            {slotSchedules.length === 0 ? (
+                              <span className="timetable-empty">—</span>
+                            ) : slotSchedules.map(schedule => (
+                              <div className="timetable-item" key={schedule.schedule_id || schedule.id}>
+                                <strong>{formatTime(schedule.start_time)} - {formatTime(schedule.end_time)}</strong>
+                                <span>{schedule.class_name || '—'}</span>
+                              </div>
+                            ))}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="detail-table-wrap">
+              <table className="data-table detail-table">
+                <thead>
+                  <tr>
+                    <th>Thứ</th>
+                    <th>Thời gian</th>
+                    <th>Lớp</th>
+                    {!isTeacher && <th>Giáo viên</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {schedules.map((schedule, index) => (
+                    <tr key={schedule.schedule_id || schedule.id || index}>
+                      <td>{DAYS_FULL[schedule.day_of_week] || '—'}</td>
+                      <td>{formatTime(schedule.start_time)} - {formatTime(schedule.end_time)}</td>
+                      <td>{schedule.class_name || '—'}</td>
+                      {!isTeacher && <td>{schedule.teacher_name || '—'}</td>}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const TablePage = ({ title, fetchUrl, columns, detailType }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState(null);
 
   useEffect(() => {
     axios.get(fetchUrl)
@@ -779,7 +923,11 @@ const TablePage = ({ title, fetchUrl, columns }) => {
               {filtered.length === 0 ? (
                 <tr><td colSpan={columns.length} className="empty-row">Chưa có dữ liệu</td></tr>
               ) : filtered.map((row, i) => (
-                <tr key={row.id || i}>
+                <tr
+                  key={row.id || i}
+                  className={detailType ? 'clickable-row' : undefined}
+                  onClick={() => detailType && setSelected(row)}
+                >
                   {columns.map(c => (
                     <td key={c.key}>{c.render ? c.render(row[c.key], row, i) : (row[c.key] ?? '—')}</td>
                   ))}
@@ -789,6 +937,7 @@ const TablePage = ({ title, fetchUrl, columns }) => {
           </table>
         </div>
       )}
+      {selected && <DetailModal type={detailType} item={selected} onClose={() => setSelected(null)} />}
     </div>
   );
 };
@@ -1236,8 +1385,8 @@ export default function AdminDashboard() {
           <Route path="/register"      element={<AccountManagementPage/>}/>
           <Route path="/classes/vip"   element={<ClassesPage type="vip"/>}/>
           <Route path="/classes/trial" element={<ClassesPage type="trial"/>}/>
-          <Route path="/teachers"      element={<TablePage title="Quản lí giáo viên"  fetchUrl={`${API}/admin/teachers`} columns={peopleCols}/>}/>
-          <Route path="/students"      element={<TablePage title="Quản lí học viên"   fetchUrl={`${API}/admin/students`} columns={studentCols}/>}/>
+          <Route path="/teachers"      element={<TablePage title="Quản lí giáo viên"  fetchUrl={`${API}/admin/teachers`} columns={peopleCols} detailType="teacher"/>}/>
+          <Route path="/students"      element={<TablePage title="Quản lí học viên"   fetchUrl={`${API}/admin/students`} columns={studentCols} detailType="student"/>}/>
         </Routes>
       </main>
     </div>
