@@ -6,6 +6,7 @@ import TeacherHome from './TeacherHome';
 import TeacherClasses from './TeacherClasses';
 import TeacherOnline from './TeacherOnline';
 import TeacherNotifications from './TeacherNotifications';
+import TeacherAvailability from './TeacherAvailability';
 import './Teacher.css';
 import DBLogo from '../../assets/dashboard-logo.png';
 
@@ -76,6 +77,9 @@ const Sidebar = ({ user, unread, onLogout }) => {
               </NavLink>
               <NavLink to="/teacher/classes/trial" className={({ isActive }) => `t-nav-item${isActive ? ' active' : ''}`}>
                 <CalendarIcon /> Lịch dạy lớp trải nghiệm
+              </NavLink>
+              <NavLink to="/teacher/availability" className={({ isActive }) => `t-nav-item${isActive ? ' active' : ''}`}>
+                <CalendarIcon /> Đăng ký lịch dạy
               </NavLink>
             </div>
           )}
@@ -160,6 +164,7 @@ export default function TeacherDashboard() {
           <Route path="/classes/trial" element={<TeacherClasses type="trial" />} />
           <Route path="/online" element={<TeacherOnline />} />
           <Route path="/my-classes" element={<TeacherClasses type="all" />} />
+          <Route path="/availability" element={<TeacherAvailability />} />
           <Route path="/notifications" element={<TeacherNotifications onRead={fetchUnread} />} />
         </Routes>
       </main>

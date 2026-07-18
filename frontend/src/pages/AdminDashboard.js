@@ -162,6 +162,10 @@ const StatusBadge = ({ val }) => (
   <Badge color={val ? '#2d7a3a' : '#999'}>{val ? 'Hoạt động' : 'Đã khóa'}</Badge>
 );
 
+const ClassStatusBadge = ({ hasClass }) => (
+  <Badge color={hasClass ? '#2d7a3a' : '#E65100'}>{hasClass ? 'Có lớp' : 'Chưa có lớp'}</Badge>
+);
+
 const getClassLinkHref = (link) => {
   const trimmed = link?.trim();
   if (!trimmed) return '';
@@ -187,6 +191,25 @@ const teacherMatchesSchedules = (teacher, schedules, excludeClassId = null) => {
     schedule.end_time &&
     !busySchedules.some(busy => schedulesOverlap(schedule, busy))
   ));
+};
+
+const availabilityMatchesSchedules = (person, schedules) => {
+  const availability = person.availability || [];
+  if (availability.length === 0 || schedules.length === 0) return false;
+  return schedules.every(schedule => availability.some(slot => (
+    String(slot.day_of_week) === String(schedule.day_of_week) &&
+    timeValue(slot.start_time) === timeValue(schedule.start_time) &&
+    timeValue(slot.end_time) === timeValue(schedule.end_time)
+  )));
+};
+
+const availabilityText = (person) => {
+  const availability = person.availability || [];
+  if (availability.length === 0) return 'Chưa đăng ký lịch';
+  const days = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+  return availability
+    .map(slot => `${days[Number(slot.day_of_week)]} ${timeValue(slot.start_time)}-${timeValue(slot.end_time)}`)
+    .join(', ');
 };
 
 const DAYS_FULL = ['Chủ nhật','Thứ 2','Thứ 3','Thứ 4','Thứ 5','Thứ 6','Thứ 7'];
@@ -229,7 +252,7 @@ const ConfirmModal = ({ item, onConfirm, onCancel, loading, title = 'Xác nhận
 // ---- Class Form Modal (Thêm / Sửa) ----
 const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
   const DAYS = ['Chủ nhật','Thứ 2','Thứ 3','Thứ 4','Thứ 5','Thứ 6','Thứ 7'];
-  const defaultSchedules = [{ day_of_week:'1', start_time:'18:00', end_time:'18:45' }];
+  const defaultSchedule = { day_of_week:'1', start_time:'18:00', end_time:'18:45' };
   const initialSchedules = initial?.schedules?.length
     ? initial.schedules.map(s => ({
       day_of_week: String(s.day_of_week ?? '1'),
@@ -240,8 +263,8 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
       day_of_week: String(initial.day_of_week),
       start_time: initial.start_time?.substring(0,5) || '18:00',
       end_time: initial.end_time?.substring(0,5) || '18:45',
-    }] : defaultSchedules);
-  const emptyForm = { name:'', type:'vip', description:'', trial_student_name:'', class_link:'', max_students:30, total_sessions:10, teacher_id:'', schedules: defaultSchedules };
+    }] : []);
+  const emptyForm = { name:'', type:'vip', description:'', trial_student_name:'', class_link:'', max_students:30, total_sessions:10, teacher_id:'', schedules: [] };
 
   const [form, setForm] = useState(initial ? {
     name:         initial.name || '',
@@ -279,7 +302,7 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
   const addSchedule = () => {
     setForm(prev => ({
       ...prev,
-      schedules: [...prev.schedules, { day_of_week:'1', start_time:'18:00', end_time:'18:45' }],
+      schedules: [...prev.schedules, defaultSchedule],
     }));
   };
   const removeSchedule = (index) => {
@@ -292,15 +315,25 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
   };
   const maxSt = Number(form.max_students) || 30;
   const isTrial = form.type === 'trial';
-  const availableTeachers = teachers.filter(teacher => (
-    teacherMatchesSchedules(teacher, form.schedules, mode === 'edit' ? initial?.id : null)
+  const hasChosenSchedule = form.schedules.length > 0 && form.schedules.every(schedule => (
+    schedule.day_of_week != null && schedule.start_time && schedule.end_time
   ));
+  const availableTeachers = !hasChosenSchedule ? [] : teachers
+    .filter(teacher => teacherMatchesSchedules(teacher, form.schedules, mode === 'edit' ? initial?.id : null))
+    .filter(teacher => availabilityMatchesSchedules(teacher, form.schedules));
 
   useEffect(() => {
     if (form.teacher_id && !availableTeachers.some(teacher => String(teacher.id) === String(form.teacher_id))) {
       set('teacher_id', '');
     }
   }, [availableTeachers, form.teacher_id]);
+
+  useEffect(() => {
+    setSelectedIds(prev => prev.filter(id => {
+      const student = allStudents.find(item => Number(item.id) === Number(id));
+      return student && hasChosenSchedule && availabilityMatchesSchedules(student, form.schedules);
+    }));
+  }, [allStudents, form.schedules, hasChosenSchedule]);
 
   // Load students
   useEffect(() => {
@@ -348,14 +381,19 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
     finally { setRemovingId(null); }
   };
 
-  const filteredStudents = allStudents.filter(s =>
-    s.full_name.toLowerCase().includes(studentSearch.toLowerCase()) ||
-    s.username.toLowerCase().includes(studentSearch.toLowerCase())
-  );
+  const filteredStudents = !hasChosenSchedule ? [] : allStudents
+    .filter(s =>
+      s.full_name.toLowerCase().includes(studentSearch.toLowerCase()) ||
+      s.username.toLowerCase().includes(studentSearch.toLowerCase()) ||
+      (s.email || '').toLowerCase().includes(studentSearch.toLowerCase())
+    )
+    .filter(s => availabilityMatchesSchedules(s, form.schedules));
 
   const handleSave = async () => {
     if (!form.name.trim()) return setErr('Vui lòng nhập tên lớp');
     if (isTrial && !form.trial_student_name.trim()) return setErr('Vui lòng nhập tên học sinh học thử');
+    if (form.schedules.length === 0) return setErr('Vui lòng chọn lịch học trước khi tạo lớp');
+    if (!form.teacher_id) return setErr('Vui lòng chọn giáo viên phù hợp lịch học');
     for (const schedule of form.schedules) {
       if (!schedule.start_time || !schedule.end_time) return setErr('Vui lòng nhập đủ giờ học');
       if (schedule.start_time >= schedule.end_time) return setErr('Giờ kết thúc phải lớn hơn giờ bắt đầu');
@@ -456,6 +494,9 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
                 <button type="button" className="mini-add-btn" onClick={addSchedule}>+ Thêm buổi</button>
               </div>
               <div className="schedule-list">
+                {form.schedules.length === 0 && (
+                  <div className="schedule-empty">Chưa chọn lịch học. Bấm "Thêm buổi" để chọn giờ trước.</div>
+                )}
                 {form.schedules.map((schedule, index) => (
                   <div className="schedule-row" key={index}>
                     <select value={schedule.day_of_week} onChange={e => setSchedule(index, 'day_of_week', e.target.value)}>
@@ -467,7 +508,6 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
                       type="button"
                       className="schedule-remove"
                       onClick={() => removeSchedule(index)}
-                      disabled={form.schedules.length === 1}
                       title="Xóa buổi học"
                     >
                       ×
@@ -480,11 +520,15 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
             <div className="form-group full-col">
               <label>Giáo viên phụ trách</label>
               <select value={form.teacher_id} onChange={e => set('teacher_id', e.target.value)}>
-                <option value="">— Chọn giáo viên phù hợp lịch học —</option>
-                {availableTeachers.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
+                <option value="">— {hasChosenSchedule ? 'Chọn giáo viên phù hợp lịch học' : 'Chọn lịch học trước'} —</option>
+                {availableTeachers.map(t => (
+                  <option key={t.id} value={t.id}>{t.full_name}</option>
+                ))}
               </select>
-              {availableTeachers.length === 0 && (
-                <small className="form-hint">Không có giáo viên trống vào lịch học này.</small>
+              {!hasChosenSchedule ? (
+                <small className="form-hint">Chọn lịch học trước để hệ thống hiện giáo viên phù hợp.</small>
+              ) : availableTeachers.length === 0 && (
+                <small className="form-hint">Không có giáo viên phù hợp lịch đăng ký này.</small>
               )}
             </div>
 
@@ -539,9 +583,11 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
 
             {loadingStudents ? (
               <div className="picker-loading">Đang tải danh sách học sinh...</div>
+            ) : !hasChosenSchedule ? (
+              <div className="picker-empty">Chọn lịch học trước để hiện học sinh phù hợp.</div>
             ) : filteredStudents.length === 0 ? (
               <div className="picker-empty">
-                {studentSearch ? 'Không tìm thấy học sinh' : 'Không còn học sinh chưa có lớp'}
+                {studentSearch ? 'Không tìm thấy học sinh phù hợp' : 'Không có học sinh phù hợp lịch đăng ký này'}
               </div>
             ) : (
               <div className="picker-list">
@@ -560,7 +606,10 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
                       <div className="picker-avatar">{s.full_name.charAt(0)}</div>
                       <div className="picker-info">
                         <div className="picker-name">{s.full_name}</div>
-                        <div className="picker-username">@{s.username}</div>
+                        <div className="picker-phone">SĐT: {s.email || 'Chưa có'}</div>
+                        <div className="picker-username">
+                          @{s.username} · {availabilityText(s)}
+                        </div>
                       </div>
                     </div>
                   );
@@ -812,7 +861,7 @@ const DetailModal = ({ type, item, onClose }) => {
           </div>
 
           <div className="detail-grid">
-            <div><label>Email</label><span>{item.email || '—'}</span></div>
+            <div><label>Số điện thoại</label><span>{item.email || '—'}</span></div>
             <div><label>Ngày tạo</label><span>{formatDate(item.created_at)}</span></div>
             {!isTeacher && <div><label>Lớp</label><span>{item.class_names || 'Chưa có lớp'}</span></div>}
           </div>
@@ -883,10 +932,11 @@ const DetailModal = ({ type, item, onClose }) => {
   );
 };
 
-const TablePage = ({ title, fetchUrl, columns, detailType }) => {
+const TablePage = ({ title, fetchUrl, columns, detailType, enableClassFilter = false }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [classFilter, setClassFilter] = useState('all');
   const [selected, setSelected] = useState(null);
 
   useEffect(() => {
@@ -896,9 +946,14 @@ const TablePage = ({ title, fetchUrl, columns, detailType }) => {
       .finally(() => setLoading(false));
   }, [fetchUrl]);
 
-  const filtered = data.filter(row =>
-    Object.values(row).some(v => String(v).toLowerCase().includes(search.toLowerCase()))
-  );
+  const filtered = data.filter(row => {
+    const matchesSearch = Object.values(row).some(v => String(v).toLowerCase().includes(search.toLowerCase()));
+    if (!matchesSearch) return false;
+    if (!enableClassFilter || classFilter === 'all') return true;
+
+    const hasClass = Boolean(row.class_names);
+    return classFilter === 'has-class' ? hasClass : !hasClass;
+  });
 
   return (
     <div className="page-content">
@@ -913,6 +968,13 @@ const TablePage = ({ title, fetchUrl, columns, detailType }) => {
         <input placeholder="Tìm kiếm..." value={search}
           onChange={e => setSearch(e.target.value)} className="search-input" />
       </div>
+      {enableClassFilter && (
+        <div className="filter-tabs" aria-label="Lọc học viên theo lớp">
+          <button className={classFilter === 'all' ? 'active' : ''} onClick={() => setClassFilter('all')}>Tất cả</button>
+          <button className={classFilter === 'has-class' ? 'active' : ''} onClick={() => setClassFilter('has-class')}>Có lớp</button>
+          <button className={classFilter === 'no-class' ? 'active' : ''} onClick={() => setClassFilter('no-class')}>Chưa có lớp</button>
+        </div>
+      )}
       {loading ? (
         <div className="loading-state">Đang tải dữ liệu...</div>
       ) : (
@@ -980,6 +1042,7 @@ const timeAgo = (dateStr) => {
 };
 
 const AdminNotifications = ({ onRead }) => {
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -1008,6 +1071,12 @@ const AdminNotifications = ({ onRead }) => {
     await axios.put(`${API}/admin/notifications/read-all`).catch(() => {});
     fetchNotifications();
     onRead?.();
+  };
+
+  const openCreateClass = async (notificationId) => {
+    await axios.put(`${API}/admin/notifications/${notificationId}/read`).catch(() => {});
+    onRead?.();
+    navigate('/admin/classes/vip');
   };
 
   return (
@@ -1040,6 +1109,13 @@ const AdminNotifications = ({ onRead }) => {
               </div>
               <div className="admin-noti-message">{n.message}</div>
               {n.sender_name && <div className="admin-noti-sender">Người gửi: {n.sender_name}</div>}
+              {(n.title || '').includes('đăng ký') && (
+                <div className="admin-noti-actions" onClick={e => e.stopPropagation()}>
+                  <button type="button" className="btn-primary" onClick={() => openCreateClass(n.id)}>
+                    Tạo lớp
+                  </button>
+                </div>
+              )}
             </button>
           ))}
         </div>
@@ -1141,8 +1217,8 @@ const AccountFormModal = ({ mode, initial, onClose, onSave }) => {
               />
             </div>
             <div className="form-group">
-              <label>Email</label>
-              <input type="email" value={form.email || ''} placeholder="Nhập email" onChange={e => set('email', e.target.value)} />
+              <label>Số điện thoại</label>
+              <input type="tel" value={form.email || ''} placeholder="Nhập số điện thoại" onChange={e => set('email', e.target.value)} />
             </div>
             <div className="form-group">
               <label>Vai trò</label>
@@ -1267,7 +1343,7 @@ const AccountManagementPage = () => {
                 <th>Họ tên</th>
                 <th>Tài khoản</th>
                 <th>Mật khẩu</th>
-                <th>Email</th>
+                <th>Số điện thoại</th>
                 <th>Vai trò</th>
                 <th>Trạng thái</th>
                 <th>Ngày tạo</th>
@@ -1360,7 +1436,7 @@ export default function AdminDashboard() {
     { key:'stt',        label:'STT', render: (_v, _row, i) => i + 1 },
     { key:'full_name',  label:'Họ tên' },
     { key:'username',   label:'Tài khoản' },
-    { key:'email',      label:'Email' },
+    { key:'email',      label:'Số điện thoại' },
     { key:'is_active',  label:'Trạng thái', render: v => <StatusBadge val={v}/> },
     { key:'created_at', label:'Ngày tạo', render: v => v ? new Date(v).toLocaleDateString('vi-VN') : '—' },
   ];
@@ -1368,9 +1444,9 @@ export default function AdminDashboard() {
     { key:'stt',         label:'STT', render: (_v, _row, i) => i + 1 },
     { key:'full_name',   label:'Họ tên' },
     { key:'username',    label:'Tài khoản' },
-    { key:'email',       label:'Email' },
+    { key:'email',       label:'Số điện thoại' },
     { key:'class_names', label:'Mã lớp', render: v => v || <span className="td-empty">Chưa có lớp</span> },
-    { key:'is_active',   label:'Trạng thái', render: v => <StatusBadge val={v}/> },
+    { key:'class_status', label:'Trạng thái', render: (_v, row) => <ClassStatusBadge hasClass={Boolean(row.class_names)}/> },
     { key:'created_at',  label:'Ngày tạo', render: v => v ? new Date(v).toLocaleDateString('vi-VN') : '—' },
   ];
 
@@ -1386,7 +1462,7 @@ export default function AdminDashboard() {
           <Route path="/classes/vip"   element={<ClassesPage type="vip"/>}/>
           <Route path="/classes/trial" element={<ClassesPage type="trial"/>}/>
           <Route path="/teachers"      element={<TablePage title="Quản lí giáo viên"  fetchUrl={`${API}/admin/teachers`} columns={peopleCols} detailType="teacher"/>}/>
-          <Route path="/students"      element={<TablePage title="Quản lí học viên"   fetchUrl={`${API}/admin/students`} columns={studentCols} detailType="student"/>}/>
+          <Route path="/students"      element={<TablePage title="Quản lí học viên"   fetchUrl={`${API}/admin/students`} columns={studentCols} detailType="student" enableClassFilter/>}/>
         </Routes>
       </main>
     </div>

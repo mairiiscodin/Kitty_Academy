@@ -7,6 +7,7 @@ import StudentMyClasses from './StudentMyClasses';
 import StudentSchedule from './StudentSchedule';
 import StudentComments from './StudentComments';
 import StudentNotifications from './StudentNotifications';
+import StudentAvailability from './StudentAvailability';
 import './Student.css';
 import DBLogo from '../../assets/dashboard-logo.png';
 
@@ -75,6 +76,9 @@ const Sidebar = ({ user, unread, onLogout }) => {
               </NavLink>
               <NavLink to="/student/schedule" className={({ isActive }) => `s-nav-item${isActive ? ' active' : ''}`}>
                 <CalIcon /> Thời khóa biểu
+              </NavLink>
+              <NavLink to="/student/availability" className={({ isActive }) => `s-nav-item${isActive ? ' active' : ''}`}>
+                <CalIcon /> Đăng ký lịch học
               </NavLink>
             </div>
           )}
@@ -147,6 +151,7 @@ export default function StudentDashboard() {
           <Route path="/" element={<StudentHome />} />
           <Route path="/my-classes" element={<StudentMyClasses />} />
           <Route path="/schedule" element={<StudentSchedule />} />
+          <Route path="/availability" element={<StudentAvailability />} />
           <Route path="/comments" element={<StudentComments />} />
           <Route path="/notifications" element={<StudentNotifications onRead={fetchUnread} />} />
         </Routes>

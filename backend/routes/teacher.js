@@ -15,6 +15,57 @@ const teacherOnly = (req, res, next) => {
 };
 
 const isDateString = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '');
+const TIME_SLOTS = new Set(['18:00-18:45', '18:45-19:30', '19:30-20:15', '20:15-21:00']);
+
+const ensureAvailabilityTable = async (conn = db) => {
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS availability_requests (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      role ENUM('teacher', 'student') NOT NULL,
+      day_of_week TINYINT NOT NULL,
+      start_time TIME NOT NULL,
+      end_time TIME NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_availability_user_slot (user_id, role, day_of_week, start_time, end_time),
+      INDEX idx_availability_role_slot (role, day_of_week, start_time, end_time),
+      CONSTRAINT fk_availability_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+};
+
+const normalizeAvailabilitySlots = (slots) => {
+  if (!Array.isArray(slots)) return [];
+  return slots
+    .map(slot => {
+      const day = Number(slot.day_of_week);
+      const range = `${String(slot.start_time || '').substring(0, 5)}-${String(slot.end_time || '').substring(0, 5)}`;
+      if (!Number.isInteger(day) || day < 0 || day > 6 || !TIME_SLOTS.has(range)) return null;
+      return { day_of_week: day, start_time: range.slice(0, 5), end_time: range.slice(6) };
+    })
+    .filter(Boolean)
+    .filter((slot, index, arr) => arr.findIndex(item => (
+      item.day_of_week === slot.day_of_week &&
+      item.start_time === slot.start_time &&
+      item.end_time === slot.end_time
+    )) === index);
+};
+
+const notifyAdminsAvailability = async (conn, { senderId, senderName, title, label, slots }) => {
+  const [admins] = await conn.query("SELECT id FROM users WHERE role='admin' AND is_active=TRUE");
+  if (admins.length === 0) return;
+  const days = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+  const slotText = slots.map(slot => `${days[slot.day_of_week]} ${slot.start_time}-${slot.end_time}`).join(', ');
+  const rows = admins.map(admin => [
+    admin.id,
+    senderId,
+    'system',
+    title,
+    `${senderName} đã đăng ký ${label}: ${slotText || 'chưa chọn khung giờ'}. Admin có thể tạo lớp từ thông báo này hoặc vào giao diện thêm lớp để chọn giờ, giáo viên và học sinh phù hợp.`,
+  ]);
+  await conn.query('INSERT INTO notifications (user_id, sender_id, type, title, message) VALUES ?', [rows]);
+};
 
 const classStudentCountSql = `
   CASE
@@ -115,6 +166,52 @@ router.get('/dashboard', teacherOnly, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: 'Lỗi server' });
+  }
+});
+
+router.get('/availability', teacherOnly, async (req, res) => {
+  try {
+    await ensureAvailabilityTable();
+    const [slots] = await db.query(
+      `SELECT day_of_week, TIME_FORMAT(start_time, '%H:%i') as start_time, TIME_FORMAT(end_time, '%H:%i') as end_time
+       FROM availability_requests
+       WHERE user_id=? AND role='teacher'
+       ORDER BY day_of_week, start_time`,
+      [req.user.id]
+    );
+    res.json({ success: true, slots });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Loi server' });
+  }
+});
+
+router.post('/availability', teacherOnly, async (req, res) => {
+  const slots = normalizeAvailabilitySlots(req.body.slots);
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    await ensureAvailabilityTable(conn);
+    await conn.query("DELETE FROM availability_requests WHERE user_id=? AND role='teacher'", [req.user.id]);
+    if (slots.length > 0) {
+      await conn.query(
+        'INSERT INTO availability_requests (user_id, role, day_of_week, start_time, end_time) VALUES ?',
+        [slots.map(slot => [req.user.id, 'teacher', slot.day_of_week, slot.start_time, slot.end_time])]
+      );
+    }
+    await notifyAdminsAvailability(conn, {
+      senderId: req.user.id,
+      senderName: req.user.full_name,
+      title: 'Giáo viên đăng ký lịch dạy',
+      label: 'lịch dạy',
+      slots,
+    });
+    await conn.commit();
+    res.json({ success: true, message: 'Đã lưu lịch dạy đăng ký', slots });
+  } catch (err) {
+    await conn.rollback();
+    res.status(500).json({ success: false, message: 'Loi server' });
+  } finally {
+    conn.release();
   }
 });
 

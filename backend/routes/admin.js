@@ -79,6 +79,46 @@ const normalizeClassSchedules = (body) => {
     .filter(s => s.day_of_week != null && s.start_time && s.end_time);
 };
 
+const ensureAvailabilityTable = async (conn = db) => {
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS availability_requests (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      role ENUM('teacher', 'student') NOT NULL,
+      day_of_week TINYINT NOT NULL,
+      start_time TIME NOT NULL,
+      end_time TIME NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_availability_user_slot (user_id, role, day_of_week, start_time, end_time),
+      INDEX idx_availability_role_slot (role, day_of_week, start_time, end_time),
+      CONSTRAINT fk_availability_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+};
+
+const attachAvailability = async (rows, role) => {
+  await ensureAvailabilityTable();
+  const ids = rows.map(row => row.id);
+  if (ids.length === 0) return rows;
+  const [slots] = await db.query(
+    `SELECT user_id, day_of_week, TIME_FORMAT(start_time, '%H:%i') as start_time, TIME_FORMAT(end_time, '%H:%i') as end_time
+     FROM availability_requests
+     WHERE role=? AND user_id IN (?)
+     ORDER BY day_of_week, start_time`,
+    [role, ids]
+  );
+  const byUser = slots.reduce((acc, slot) => {
+    if (!acc[slot.user_id]) acc[slot.user_id] = [];
+    acc[slot.user_id].push(slot);
+    return acc;
+  }, {});
+  rows.forEach(row => {
+    row.availability = byUser[row.id] || [];
+  });
+  return rows;
+};
+
 const validateClassSchedules = (res, schedules) => {
   for (const schedule of schedules) {
     if (!validateScheduleInput(res, {
@@ -353,7 +393,7 @@ router.get('/classes/:id/available-students', async (req, res) => {
         )
       ORDER BY u.full_name
     `);
-    res.json({ success: true, students: rows });
+    res.json({ success: true, students: await attachAvailability(rows, 'student') });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Lá»—i server' });
   }
@@ -374,7 +414,7 @@ router.get('/students/all', async (req, res) => {
         )
       ORDER BY u.full_name
     `);
-    res.json({ success: true, students: rows });
+    res.json({ success: true, students: await attachAvailability(rows, 'student') });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Lá»—i server' });
   }
@@ -670,7 +710,7 @@ router.get('/teachers', async (req, res) => {
     rows.forEach(row => {
       row.schedules = schedulesByTeacher[row.id] || [];
     });
-    res.json({ success: true, teachers: rows });
+    res.json({ success: true, teachers: await attachAvailability(rows, 'teacher') });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Lá»—i server' });
   }

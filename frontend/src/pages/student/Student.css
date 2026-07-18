@@ -535,6 +535,92 @@
 }
 
 /* ================================================
+   AVAILABILITY PAGE
+================================================ */
+.availability-card {
+  background: #fff;
+  border: 1.5px solid #e8f0e9;
+  border-radius: 14px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  overflow: hidden;
+}
+.availability-grid {
+  display: grid;
+  grid-template-columns: 110px repeat(7, minmax(78px, 1fr));
+  overflow-x: auto;
+}
+.availability-head,
+.availability-time {
+  background: #f8fdf8;
+  border-bottom: 1px solid #e8f0e9;
+  border-right: 1px solid #e8f0e9;
+  color: #5a8c65;
+  font-size: 12px;
+  font-weight: 900;
+  min-height: 42px;
+  padding: 10px 8px;
+  text-align: center;
+}
+.availability-time {
+  align-items: center;
+  color: #6d806f;
+  display: flex;
+  justify-content: center;
+  white-space: nowrap;
+}
+.availability-cell {
+  align-items: center;
+  background: #fff;
+  border: 0;
+  border-bottom: 1px solid #edf3ee;
+  border-right: 1px solid #edf3ee;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  font-family: 'Nunito', sans-serif;
+  font-size: 18px;
+  font-weight: 900;
+  justify-content: center;
+  min-height: 48px;
+}
+.availability-cell:hover { background: #f0f7f1; }
+.availability-cell.checked { background: #2d7a3a; }
+.availability-footer {
+  align-items: center;
+  border-top: 1px solid #edf3ee;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 16px 18px;
+}
+.availability-footer span {
+  color: #5a7a5e;
+  font-size: 13px;
+  font-weight: 800;
+}
+.s-form-msg {
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 800;
+  margin-bottom: 16px;
+  padding: 11px 14px;
+}
+.s-form-msg.success { background: #e8f5e9; border: 1px solid #c8e6c9; color: #2d7a3a; }
+.s-form-msg.error { background: #ffebee; border: 1px solid #ffcdd2; color: #c62828; }
+.s-btn-primary {
+  background: #2d7a3a;
+  border: 0;
+  border-radius: 10px;
+  color: #fff;
+  cursor: pointer;
+  font-family: 'Nunito', sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 10px 22px;
+}
+.s-btn-primary:disabled { cursor: not-allowed; opacity: 0.55; }
+
+/* ================================================
    RESPONSIVE
 ================================================ */
 @media (max-width: 900px) {
