@@ -619,6 +619,149 @@
   padding: 10px 22px;
 }
 .s-btn-primary:disabled { cursor: not-allowed; opacity: 0.55; }
+.s-btn-secondary {
+  background: #fff;
+  border: 1.5px solid #d0e8d5;
+  border-radius: 10px;
+  color: #2d7a3a;
+  cursor: pointer;
+  font-family: 'Nunito', sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 9px 18px;
+}
+.s-btn-secondary:disabled { cursor: not-allowed; opacity: 0.55; }
+
+/* ================================================
+   CLASS REGISTRATION PAGE
+================================================ */
+.s-register-card {
+  background: #fff;
+  border: 1.5px solid #e8f0e9;
+  border-radius: 14px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  overflow: hidden;
+}
+.s-register-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 20px;
+}
+.s-register-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.s-register-field.full { grid-column: 1 / -1; }
+.s-register-field label,
+.s-register-row-head label {
+  color: #5a6e5c;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+.s-register-field select,
+.s-register-field textarea {
+  background: #fff;
+  border: 1.5px solid #d0e8d5;
+  border-radius: 8px;
+  color: #1a3a22;
+  font-family: 'Nunito', sans-serif;
+  font-size: 13.5px;
+  outline: none;
+  padding: 10px 12px;
+}
+.s-register-field textarea { resize: vertical; }
+.s-register-field small {
+  color: #8a6d1d;
+  font-size: 12px;
+  font-weight: 800;
+}
+.s-register-row-head,
+.s-register-footer {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+.s-register-schedules {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.s-register-schedule-row {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(110px, 0.8fr) minmax(150px, 1.2fr) 36px;
+}
+.s-mini-btn,
+.s-mini-danger {
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: 'Nunito', sans-serif;
+  font-size: 12px;
+  font-weight: 900;
+}
+.s-mini-btn {
+  background: #e8f5e9;
+  color: #2d7a3a;
+  padding: 7px 12px;
+}
+.s-mini-btn:disabled { cursor: not-allowed; opacity: 0.5; }
+.s-mini-danger {
+  background: #ffebee;
+  color: #c62828;
+}
+.s-register-footer {
+  border-top: 1px solid #edf3ee;
+  padding: 16px 20px;
+}
+.s-register-footer span {
+  color: #5a7a5e;
+  font-size: 13px;
+  font-weight: 800;
+}
+.s-table-wrap {
+  overflow-x: auto;
+}
+.s-register-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.s-register-table th {
+  background: #f8fdf8;
+  border-bottom: 1px solid #e2eee4;
+  color: #5a8c65;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 12px 14px;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.s-register-table td {
+  border-bottom: 1px solid #edf3ee;
+  color: #1a3a22;
+  font-size: 13.5px;
+  padding: 13px 14px;
+  vertical-align: middle;
+}
+.s-register-table tr:last-child td {
+  border-bottom: 0;
+}
+.s-register-action {
+  text-align: right;
+  white-space: nowrap;
+}
+.s-register-status {
+  color: #2d7a3a;
+  font-size: 12px;
+  font-weight: 900;
+  margin-bottom: 6px;
+}
 
 /* ================================================
    RESPONSIVE

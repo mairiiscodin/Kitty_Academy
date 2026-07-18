@@ -5,6 +5,8 @@ import './Teacher.css';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
+const formatClassSize = (cls) => `${cls.student_count ?? 0}/${cls.max_students || 30}`;
+
 function timeSince(dateStr) {
   if (!dateStr) return 'Chưa xác định';
   const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
@@ -86,7 +88,7 @@ function AllClasses() {
                   </td>
                   <td>{DAYS_VI[cls.day_of_week]}</td>
                   <td>{cls.start_time?.substring(0,5)} - {cls.end_time?.substring(0,5)}</td>
-                  <td>{cls.student_count ?? 0}</td>
+                  <td>{formatClassSize(cls)}</td>
                 </tr>
               ))}
             </tbody>

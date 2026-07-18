@@ -213,8 +213,13 @@ const availabilityText = (person) => {
 };
 
 const DAYS_FULL = ['Chủ nhật','Thứ 2','Thứ 3','Thứ 4','Thứ 5','Thứ 6','Thứ 7'];
+const DAYS_SHORT = ['CN','T2','T3','T4','T5','T6','T7'];
 const formatTime = (value) => timeValue(value) || '—';
 const formatDate = (value) => value ? new Date(value).toLocaleDateString('vi-VN') : '—';
+const formatScheduleChip = (schedule) => (
+  `${DAYS_SHORT[Number(schedule.day_of_week)] || '—'} ${formatTime(schedule.start_time)} - ${formatTime(schedule.end_time)}`
+);
+const formatClassSize = (cls) => `${cls.student_count ?? 0}/${cls.max_students || 30}`;
 const dayColumns = [1, 2, 3, 4, 5, 6, 0];
 const timeSlots = [
   { key: '18:00', label: '18:00 - 18:45', start: '18:00', end: '18:45' },
@@ -296,6 +301,15 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
       ...prev,
       schedules: prev.schedules.map((schedule, i) => (
         i === index ? { ...schedule, [key]: value } : schedule
+      )),
+    }));
+  };
+  const setScheduleSlot = (index, slotKey) => {
+    const slot = timeSlots.find(item => item.key === slotKey) || timeSlots[0];
+    setForm(prev => ({
+      ...prev,
+      schedules: prev.schedules.map((schedule, i) => (
+        i === index ? { ...schedule, start_time: slot.start, end_time: slot.end } : schedule
       )),
     }));
   };
@@ -502,8 +516,11 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
                     <select value={schedule.day_of_week} onChange={e => setSchedule(index, 'day_of_week', e.target.value)}>
                       {DAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}
                     </select>
-                    <input type="time" value={schedule.start_time} onChange={e => setSchedule(index, 'start_time', e.target.value)} />
-                    <input type="time" value={schedule.end_time} onChange={e => setSchedule(index, 'end_time', e.target.value)} />
+                    <select value={timeValue(schedule.start_time)} onChange={e => setScheduleSlot(index, e.target.value)}>
+                      {timeSlots.map(slot => (
+                        <option key={slot.key} value={slot.key}>{slot.label}</option>
+                      ))}
+                    </select>
                     <button
                       type="button"
                       className="schedule-remove"
@@ -641,7 +658,6 @@ const ClassFormModal = ({ mode, initial, teachers, onClose, onSave }) => {
 // CLASSES PAGE (CRUD)
 // ================================================================
 const ClassesPage = ({ type }) => {
-  const DAYS_SHORT = ['CN','T2','T3','T4','T5','T6','T7'];
   const title = type === 'vip' ? 'Quản lí lớp chính thức' : 'Quản lí lớp Trải nghiệm';
 
   const [classes, setClasses]     = useState([]);
@@ -751,7 +767,6 @@ const ClassesPage = ({ type }) => {
                 {type === 'trial' && <th>Tên học sinh</th>}
                 <th>Giáo viên</th>
                 <th>Ngày học</th>
-                <th>Giờ học</th>
                 {type !== 'trial' && <th>Sĩ số</th>}
                 {type !== 'trial' && <th>Điểm danh / Tổng buổi</th>}
                 <th>Trạng thái</th>
@@ -760,7 +775,7 @@ const ClassesPage = ({ type }) => {
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={type === 'trial' ? 11 : 11} className="empty-row">
+                <tr><td colSpan={type === 'trial' ? 9 : 10} className="empty-row">
                   {search ? 'Không tìm thấy lớp nào' : 'Chưa có lớp học nào'}
                 </td></tr>
               ) : filtered.map((cls, i) => (
@@ -779,19 +794,14 @@ const ClassesPage = ({ type }) => {
                   <td><TypeBadge type={cls.type}/></td>
                   {type === 'trial' && <td>{cls.trial_student_name || <span className="td-empty">Chưa có</span>}</td>}
                   <td>{cls.teacher_name || <span className="td-empty">Chưa có</span>}</td>
-                  <td className="td-schedules">
-                    {getSchedules(cls).length > 0 ? getSchedules(cls).map((schedule, idx) => (
-                      <span key={idx} className="schedule-chip">{DAYS_SHORT[schedule.day_of_week]}</span>
-                    )) : '—'}
-                  </td>
                   <td className="td-time td-schedules">
                     {getSchedules(cls).length > 0 ? getSchedules(cls).map((schedule, idx) => (
                       <span key={idx} className="schedule-chip">
-                        {schedule.start_time?.substring(0,5)} - {schedule.end_time?.substring(0,5)}
+                        {formatScheduleChip(schedule)}
                       </span>
                     )) : '—'}
                   </td>
-                  {type !== 'trial' && <td className="td-center">{cls.student_count}</td>}
+                  {type !== 'trial' && <td className="td-center">{formatClassSize(cls)}</td>}
                   {type !== 'trial' && <td className="td-center">{cls.session_count ?? 0}/{cls.total_sessions || 10}</td>}
                   <td><StatusBadge val={cls.is_active}/></td>
                   <td>

@@ -41,17 +41,91 @@ const normalizeAvailabilitySlots = (slots) => {
     )) === index);
 };
 
-const notifyAdminsAvailability = async (conn, { senderId, senderName, slots }) => {
+const notifyAdminsAvailability = async (conn, { senderId, senderName, slots, note }) => {
   const [admins] = await conn.query("SELECT id FROM users WHERE role='admin' AND is_active=TRUE");
   if (admins.length === 0) return;
   const days = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
   const slotText = slots.map(slot => `${days[slot.day_of_week]} ${slot.start_time}-${slot.end_time}`).join(', ');
+  const noteText = note?.trim() ? ` Ghi chú: ${note.trim()}` : '';
   const rows = admins.map(admin => [
     admin.id,
     senderId,
     'system',
     'Học sinh đăng ký lịch học',
-    `${senderName} đã đăng ký lịch học: ${slotText || 'chưa chọn khung giờ'}. Admin có thể tạo lớp từ thông báo này hoặc vào giao diện thêm lớp để chọn giờ, giáo viên và học sinh phù hợp.`,
+    `${senderName} đã đăng ký lịch học: ${slotText || 'chưa chọn khung giờ'}.${noteText} Admin có thể tạo lớp từ thông báo này hoặc vào giao diện thêm lớp để chọn giờ, giáo viên và học sinh phù hợp.`,
+  ]);
+  await conn.query('INSERT INTO notifications (user_id, sender_id, type, title, message) VALUES ?', [rows]);
+};
+
+const attachTeacherAvailability = async (rows) => {
+  await ensureAvailabilityTable();
+  const ids = rows.map(row => row.id);
+  if (ids.length === 0) return rows;
+  const [slots] = await db.query(
+    `SELECT user_id, day_of_week, TIME_FORMAT(start_time, '%H:%i') as start_time, TIME_FORMAT(end_time, '%H:%i') as end_time
+     FROM availability_requests
+     WHERE role='teacher' AND user_id IN (?)
+     ORDER BY day_of_week, start_time`,
+    [ids]
+  );
+  const byUser = slots.reduce((acc, slot) => {
+    if (!acc[slot.user_id]) acc[slot.user_id] = [];
+    acc[slot.user_id].push(slot);
+    return acc;
+  }, {});
+  rows.forEach(row => {
+    row.availability = byUser[row.id] || [];
+  });
+  return rows;
+};
+
+const normalizeClassSchedules = (schedules) => {
+  if (!Array.isArray(schedules)) return [];
+  return schedules
+    .map(schedule => {
+      const day = Number(schedule.day_of_week);
+      const range = `${String(schedule.start_time || '').substring(0, 5)}-${String(schedule.end_time || '').substring(0, 5)}`;
+      if (!Number.isInteger(day) || day < 0 || day > 6 || !TIME_SLOTS.has(range)) return null;
+      return { day_of_week: day, start_time: range.slice(0, 5), end_time: range.slice(6) };
+    })
+    .filter(Boolean)
+    .filter((slot, index, arr) => arr.findIndex(item => (
+      item.day_of_week === slot.day_of_week &&
+      item.start_time === slot.start_time &&
+      item.end_time === slot.end_time
+    )) === index);
+};
+
+const notifyAdminsClassRegistration = async (conn, { senderId, senderName, className, schedules, teacherName }) => {
+  const [admins] = await conn.query("SELECT id FROM users WHERE role='admin' AND is_active=TRUE");
+  if (admins.length === 0) return;
+
+  const days = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+  const scheduleText = schedules
+    .map(slot => `${days[slot.day_of_week]} ${slot.start_time}-${slot.end_time}`)
+    .join(', ');
+  const teacherText = teacherName ? ` Giáo viên: ${teacherName}.` : '';
+  const message = `${senderName} đã đăng ký lớp ${className}. Lịch học: ${scheduleText || 'chưa có lịch'}.${teacherText}`;
+
+  const rows = admins.map(admin => [
+    admin.id,
+    senderId,
+    'system',
+    'Học sinh đăng ký lớp',
+    message,
+  ]);
+  await conn.query('INSERT INTO notifications (user_id, sender_id, type, title, message) VALUES ?', [rows]);
+};
+
+const notifyAdminsClassCancellation = async (conn, { senderId, senderName, className }) => {
+  const [admins] = await conn.query("SELECT id FROM users WHERE role='admin' AND is_active=TRUE");
+  if (admins.length === 0) return;
+  const rows = admins.map(admin => [
+    admin.id,
+    senderId,
+    'system',
+    'Học sinh hủy đăng ký lớp',
+    `${senderName} đã hủy đăng ký lớp ${className}.`,
   ]);
   await conn.query('INSERT INTO notifications (user_id, sender_id, type, title, message) VALUES ?', [rows]);
 };
@@ -196,9 +270,7 @@ router.get('/availability', studentOnly, async (req, res) => {
 
 router.post('/availability', studentOnly, async (req, res) => {
   const slots = normalizeAvailabilitySlots(req.body.slots);
-  if (slots.length > 2) {
-    return res.status(400).json({ success: false, message: 'Học sinh chỉ được đăng ký tối đa 2 buổi/tuần' });
-  }
+  const note = req.body.note;
   const conn = await db.getConnection();
   try {
     await conn.beginTransaction();
@@ -210,7 +282,7 @@ router.post('/availability', studentOnly, async (req, res) => {
         [slots.map(slot => [req.user.id, 'student', slot.day_of_week, slot.start_time, slot.end_time])]
       );
     }
-    await notifyAdminsAvailability(conn, { senderId: req.user.id, senderName: req.user.full_name, slots });
+    await notifyAdminsAvailability(conn, { senderId: req.user.id, senderName: req.user.full_name, slots, note });
     await conn.commit();
     res.json({ success: true, message: 'Đã lưu lịch học đăng ký', slots });
   } catch (err) {
@@ -222,6 +294,219 @@ router.post('/availability', studentOnly, async (req, res) => {
 });
 
 // ===================== LỚP HỌC =====================
+router.get('/teachers', studentOnly, async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      "SELECT id, username, full_name, email, is_active, created_at FROM users WHERE role='teacher' AND is_active=TRUE ORDER BY full_name"
+    );
+    const teacherIds = rows.map(row => row.id);
+    let schedulesByTeacher = {};
+
+    if (teacherIds.length > 0) {
+      const [scheduleRows] = await db.query(
+        `SELECT s.id, s.class_id, s.teacher_id, s.day_of_week, s.start_time, s.end_time, c.name as class_name
+         FROM schedules s
+         JOIN classes c ON c.id = s.class_id AND c.is_active = TRUE
+         WHERE s.is_active = TRUE AND s.teacher_id IN (?)
+         ORDER BY s.day_of_week, s.start_time`,
+        [teacherIds]
+      );
+
+      schedulesByTeacher = scheduleRows.reduce((acc, schedule) => {
+        if (!acc[schedule.teacher_id]) acc[schedule.teacher_id] = [];
+        acc[schedule.teacher_id].push(schedule);
+        return acc;
+      }, {});
+    }
+
+    rows.forEach(row => {
+      row.schedules = schedulesByTeacher[row.id] || [];
+    });
+
+    res.json({ success: true, teachers: await attachTeacherAvailability(rows) });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Loi server' });
+  }
+});
+
+router.get('/available-classes', studentOnly, async (req, res) => {
+  try {
+    const [[{ registered_count }]] = await db.query(
+      `SELECT COUNT(*) as registered_count
+       FROM students st
+       JOIN classes c ON c.id = st.class_id AND c.is_active = TRUE AND c.type = 'vip'
+       WHERE st.user_id = ?`,
+      [req.user.id]
+    );
+
+    const [rows] = await db.query(
+      `SELECT c.id, c.name, c.type, c.max_students, c.total_sessions, u.full_name as teacher_name,
+              COUNT(DISTINCT st.user_id) as student_count,
+              (SELECT COUNT(DISTINCT sc.session_date) FROM session_comments sc WHERE sc.class_id = c.id) as session_count,
+              EXISTS (
+                SELECT 1 FROM students mine
+                WHERE mine.class_id = c.id AND mine.user_id = ?
+              ) as is_registered
+       FROM classes c
+       LEFT JOIN users u ON u.id = c.teacher_id
+       LEFT JOIN students st ON st.class_id = c.id
+       WHERE c.is_active = TRUE AND c.type = 'vip'
+       GROUP BY c.id, c.name, c.type, c.max_students, c.total_sessions, u.full_name
+       ORDER BY c.created_at DESC`,
+      [req.user.id]
+    );
+
+    const classIds = rows.map(row => row.id);
+    let schedulesByClass = {};
+    if (classIds.length > 0) {
+      const [scheduleRows] = await db.query(
+        `SELECT class_id, day_of_week, TIME_FORMAT(start_time, '%H:%i') as start_time, TIME_FORMAT(end_time, '%H:%i') as end_time
+         FROM schedules
+         WHERE is_active = TRUE AND class_id IN (?)
+         ORDER BY day_of_week, start_time`,
+        [classIds]
+      );
+      schedulesByClass = scheduleRows.reduce((acc, schedule) => {
+        if (!acc[schedule.class_id]) acc[schedule.class_id] = [];
+        acc[schedule.class_id].push(schedule);
+        return acc;
+      }, {});
+    }
+
+    rows.forEach(row => {
+      row.schedules = schedulesByClass[row.id] || [];
+      row.is_full = Number(row.student_count || 0) >= Number(row.max_students || 30);
+    });
+
+    res.json({ success: true, classes: rows, has_registered_class: registered_count > 0 });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Loi server' });
+  }
+});
+
+router.post('/classes/:id/register', studentOnly, async (req, res) => {
+  const classId = req.params.id;
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [[cls]] = await conn.query(
+      `SELECT c.id, c.name, c.max_students, u.full_name as teacher_name
+       FROM classes c
+       LEFT JOIN users u ON u.id = c.teacher_id
+       WHERE c.id=? AND c.type='vip' AND c.is_active=TRUE
+       FOR UPDATE`,
+      [classId]
+    );
+    if (!cls) {
+      await conn.rollback();
+      return res.status(404).json({ success: false, message: 'Lop khong ton tai' });
+    }
+
+    const [[existing]] = await conn.query(
+      'SELECT COUNT(*) as count FROM students WHERE class_id=? AND user_id=?',
+      [classId, req.user.id]
+    );
+    if (existing.count > 0) {
+      await conn.rollback();
+      return res.status(400).json({ success: false, message: 'Ban da dang ky lop nay' });
+    }
+
+    const [[registered]] = await conn.query(
+      `SELECT COUNT(*) as count
+       FROM students st
+       JOIN classes c ON c.id = st.class_id AND c.is_active = TRUE AND c.type = 'vip'
+       WHERE st.user_id=?`,
+      [req.user.id]
+    );
+    if (registered.count > 0) {
+      await conn.rollback();
+      return res.status(400).json({ success: false, message: 'Ban chi duoc dang ky 1 lop' });
+    }
+
+    const [[{ cur }]] = await conn.query(
+      'SELECT COUNT(DISTINCT user_id) as cur FROM students WHERE class_id=?',
+      [classId]
+    );
+    if (cur >= (cls.max_students || 30)) {
+      await conn.rollback();
+      return res.status(400).json({ success: false, message: 'Lop da du si so' });
+    }
+
+    await conn.query(
+      'INSERT INTO students (user_id, class_id, enrollment_date) VALUES (?, ?, ?)',
+      [req.user.id, classId, new Date().toISOString().slice(0, 10)]
+    );
+
+    const [schedules] = await conn.query(
+      `SELECT day_of_week, TIME_FORMAT(start_time, '%H:%i') as start_time, TIME_FORMAT(end_time, '%H:%i') as end_time
+       FROM schedules
+       WHERE class_id=? AND is_active=TRUE
+       ORDER BY day_of_week, start_time`,
+      [classId]
+    );
+
+    await notifyAdminsClassRegistration(conn, {
+      senderId: req.user.id,
+      senderName: req.user.full_name,
+      className: cls.name,
+      schedules,
+      teacherName: cls.teacher_name,
+    });
+
+    await conn.commit();
+    res.json({ success: true, message: 'Da dang ky lop thanh cong' });
+  } catch (err) {
+    await conn.rollback();
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ success: false, message: 'Ban da dang ky lop nay' });
+    }
+    res.status(500).json({ success: false, message: 'Loi server' });
+  } finally {
+    conn.release();
+  }
+});
+
+router.delete('/classes/:id/register', studentOnly, async (req, res) => {
+  const classId = req.params.id;
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [[cls]] = await conn.query(
+      `SELECT id, name
+       FROM classes
+       WHERE id=? AND type='vip' AND is_active=TRUE`,
+      [classId]
+    );
+    if (!cls) {
+      await conn.rollback();
+      return res.status(404).json({ success: false, message: 'Lop khong ton tai' });
+    }
+
+    const [result] = await conn.query(
+      'DELETE FROM students WHERE class_id=? AND user_id=?',
+      [classId, req.user.id]
+    );
+    if (result.affectedRows === 0) {
+      await conn.rollback();
+      return res.status(400).json({ success: false, message: 'Ban chua dang ky lop nay' });
+    }
+
+    await notifyAdminsClassCancellation(conn, {
+      senderId: req.user.id,
+      senderName: req.user.full_name,
+      className: cls.name,
+    });
+
+    await conn.commit();
+    res.json({ success: true, message: 'Da huy dang ky lop' });
+  } catch (err) {
+    await conn.rollback();
+    res.status(500).json({ success: false, message: 'Loi server' });
+  } finally {
+    conn.release();
+  }
+});
+
 router.get('/my-classes', studentOnly, async (req, res) => {
   try {
     const [rows] = await db.query(

@@ -39,6 +39,11 @@ const getClassLinkHref = (link) => {
 };
 
 const timeValue = (value) => String(value || '').substring(0, 5);
+const DAYS_SHORT = ['CN','T2','T3','T4','T5','T6','T7'];
+const formatScheduleChip = (schedule) => (
+  `${DAYS_SHORT[Number(schedule.day_of_week)] || '-'} ${timeValue(schedule.start_time) || '-'} - ${timeValue(schedule.end_time) || '-'}`
+);
+const formatClassSize = (cls) => `${cls.student_count ?? 0}/${cls.max_students || 30}`;
 
 const schedulesOverlap = (a, b) => (
   String(a.day_of_week) === String(b.day_of_week) &&
@@ -288,7 +293,6 @@ const AdmissionHome = ({ user, stats }) => (
 );
 
 const ClassesPage = ({ type }) => {
-  const DAYS_SHORT = ['CN','T2','T3','T4','T5','T6','T7'];
   const title = type === 'vip' ? 'Danh sách lớp chính thức' : 'Quản lí lớp trải nghiệm';
 
   const [classes, setClasses] = useState([]);
@@ -393,7 +397,6 @@ const ClassesPage = ({ type }) => {
                 {type === 'trial' && <th>Tên học sinh</th>}
                 <th>Giáo viên</th>
                 <th>Ngày học</th>
-                <th>Giờ học</th>
                 {type !== 'trial' && <th>Sĩ số</th>}
                 {type !== 'trial' && <th>Điểm danh / Tổng buổi</th>}
                 <th>Trạng thái</th>
@@ -402,7 +405,7 @@ const ClassesPage = ({ type }) => {
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={11} className="empty-row">Chưa có dữ liệu</td></tr>
+                <tr><td colSpan={type === 'trial' ? 9 : 10} className="empty-row">Chưa có dữ liệu</td></tr>
               ) : filtered.map((cls, index) => (
                 <tr key={cls.id}>
                   <td className="td-num">{index + 1}</td>
@@ -417,9 +420,8 @@ const ClassesPage = ({ type }) => {
                   <td><TypeBadge type={cls.type}/></td>
                   {type === 'trial' && <td>{cls.trial_student_name || <span className="td-empty">Chưa có</span>}</td>}
                   <td>{cls.teacher_name || <span className="td-empty">Chưa có</span>}</td>
-                  <td>{cls.day_of_week != null ? DAYS_SHORT[cls.day_of_week] : '-'}</td>
-                  <td className="td-time">{cls.start_time ? `${cls.start_time.substring(0,5)} - ${cls.end_time?.substring(0,5)}` : '-'}</td>
-                  {type !== 'trial' && <td className="td-center">{cls.student_count}</td>}
+                  <td className="td-time">{cls.start_time ? formatScheduleChip(cls) : '-'}</td>
+                  {type !== 'trial' && <td className="td-center">{formatClassSize(cls)}</td>}
                   {type !== 'trial' && <td className="td-center">{cls.session_count ?? 0}/{cls.total_sessions || 10}</td>}
                   <td><StatusBadge val={cls.is_active}/></td>
                   <td>

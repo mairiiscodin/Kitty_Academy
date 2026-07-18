@@ -120,6 +120,8 @@ const attachAvailability = async (rows, role) => {
 };
 
 const validateClassSchedules = (res, schedules) => {
+  const fixedTimeSlots = new Set(['18:00-18:45', '18:45-19:30', '19:30-20:15', '20:15-21:00']);
+
   for (const schedule of schedules) {
     if (!validateScheduleInput(res, {
       teacherId: true,
@@ -127,6 +129,12 @@ const validateClassSchedules = (res, schedules) => {
       startTime: schedule.start_time,
       endTime: schedule.end_time,
     })) return false;
+
+    const slot = `${String(schedule.start_time || '').substring(0, 5)}-${String(schedule.end_time || '').substring(0, 5)}`;
+    if (!fixedTimeSlots.has(slot)) {
+      res.status(400).json({ success: false, message: 'Gio hoc phai nam trong 4 khung gio co dinh' });
+      return false;
+    }
   }
 
   for (let i = 0; i < schedules.length; i++) {
@@ -290,7 +298,12 @@ router.get('/classes', async (req, res) => {
       SELECT c.*, u.full_name as teacher_name,
         CASE
           WHEN c.type = 'trial' AND NULLIF(TRIM(c.trial_student_name), '') IS NOT NULL THEN 1
-          ELSE (SELECT COUNT(*) FROM students st WHERE st.class_id = c.id)
+          ELSE (
+            SELECT COUNT(DISTINCT st.user_id)
+            FROM students st
+            JOIN users su ON su.id = st.user_id AND su.role = 'student' AND su.is_active = TRUE
+            WHERE st.class_id = c.id
+          )
         END as student_count,
         (SELECT COUNT(DISTINCT session_date) FROM session_comments WHERE class_id = c.id) as session_count
       FROM classes c
@@ -340,7 +353,7 @@ router.get('/classes/:id/students', async (req, res) => {
         (SELECT COUNT(*) FROM session_comments WHERE class_id = ? AND student_id = u.id AND attendance IN ('present', 'late')) as attended_sessions,
         (SELECT COALESCE(c.total_sessions, 10) FROM classes c WHERE c.id = ?) as total_sessions
       FROM students st
-      JOIN users u ON u.id = st.user_id
+      JOIN users u ON u.id = st.user_id AND u.role = 'student' AND u.is_active = TRUE
       WHERE st.class_id = ?
       ORDER BY u.full_name
     `, [req.params.id, req.params.id, req.params.id]);

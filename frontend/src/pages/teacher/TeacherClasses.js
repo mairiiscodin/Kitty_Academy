@@ -20,6 +20,9 @@ function todayISO() {
 function scheduleLabel(schedule) {
   return `${DAYS_VI[schedule.day_of_week]} ${fmtTime(schedule.start_time)} - ${fmtTime(schedule.end_time)}`;
 }
+function formatClassSize(cls) {
+  return `${cls.student_count ?? 0}/${cls.max_students || 30}`;
+}
 function getClassSchedules(cls) {
   return cls.schedules?.length
     ? cls.schedules
@@ -231,7 +234,7 @@ function AttendanceModal({ cls, onClose, onSaved }) {
           <div className="t-modal-class-meta">
             <span>{DAYS_VI[cls.day_of_week]}</span>
             <span>{fmtTime(cls.start_time)} - {fmtTime(cls.end_time)}</span>
-            <span>{cls.student_count ?? 0} học viên</span>
+            <span>{formatClassSize(cls)} học viên</span>
             <span>{cls.session_count ?? 0} buổi đã dạy</span>
           </div>
         </div>
@@ -370,7 +373,7 @@ function ClassDetailPage({ classes, selectedId, onSelect, onCancelRequest }) {
           <div className="t-class-stats">
             <div className="t-class-stat">
               <span>Học viên</span>
-              <strong>{selectedClass.student_count ?? 0}</strong>
+              <strong>{formatClassSize(selectedClass)}</strong>
             </div>
             <div className="t-class-stat">
               <span>Buổi đã dạy</span>

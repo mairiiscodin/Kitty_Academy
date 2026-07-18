@@ -29,6 +29,9 @@ function getSlotIndex(start) {
 function scheduleLabel(schedule) {
   return `${DAYS_VI[schedule.day_of_week]} ${fmtTime(schedule.start_time)} - ${fmtTime(schedule.end_time)}`;
 }
+function formatClassSize(cls) {
+  return `${cls.student_count ?? 0}/${cls.max_students || 30}`;
+}
 function groupClassesById(rows) {
   const byId = new Map();
   rows.forEach(row => {
@@ -158,7 +161,7 @@ export default function TeacherHome() {
                   </div>
 
                   <div className="t-home-class-stats">
-                    <div><span>Học viên</span><strong>{selectedClass.student_count ?? 0}</strong></div>
+                    <div><span>Học viên</span><strong>{formatClassSize(selectedClass)}</strong></div>
                     <div><span>Buổi đã dạy</span><strong>{selectedClass.session_count ?? 0}</strong></div>
                     <div><span>Tổng buổi</span><strong>{selectedClass.total_sessions || 10}</strong></div>
                   </div>
